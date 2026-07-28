@@ -1,0 +1,78 @@
+name: Deploy backend
+
+# フロントエンド（Expo Web）は Vercel が GitHub 連携で自動デプロイするため、
+# このワークフローはバックエンドのみを対象にする。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-backend.yml'
+  # 手動実行（サーバー再構築時など）
+  workflow_dispatch:
+
+# デプロイ中に次の push が来ても多重実行しない
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # サーバー(RAM 956MB)で npm install させると重いので、
+      # 依存の解決はここで済ませて成果物ごと転送する
+      - name: Install dependencies
+        working-directory: server
+        run: npm install --omit=dev
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to server
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+        run: |
+          # .env はサーバー上にのみ存在する秘密情報なので消さない
+          rsync -az --delete --exclude='.env' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            server/ "$USER@$HOST:/opt/manaby-api/"
+
+      - name: Restart service
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'sudo systemctl restart manaby-api && sleep 3 && systemctl is-active manaby-api'
+
+      # 起動しても DB に繋がらなければ失敗扱いにする
+      - name: Health check
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'curl -fsS --max-time 10 http://127.0.0.1:8787/health'
+
+      - name: Show logs on failure
+        if: failure()
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            'journalctl -u manaby-api -n 50 --no-pager' || true

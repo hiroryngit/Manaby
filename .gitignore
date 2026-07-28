@@ -31,7 +31,9 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -42,3 +44,6 @@ graphify-out/
 # generated native folders
 /ios
 /android
+
+# ssh public keys (private *.key already ignored above)
+*.key.pub

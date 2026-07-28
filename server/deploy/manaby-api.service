@@ -1,0 +1,30 @@
+[Unit]
+Description=manaby API (Turso + OpenRouter 中継)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/manaby-api
+# 秘密情報は git に入れず、サーバー上のこのファイルにのみ置く
+EnvironmentFile=/opt/manaby-api/.env
+ExecStart=/usr/bin/node /opt/manaby-api/src/index.mjs
+Restart=always
+RestartSec=3
+
+# RAM 956MB のインスタンスのため、暴走時に他を巻き込まないよう上限を設ける
+MemoryMax=400M
+
+# 最小権限
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=manaby-api
+
+[Install]
+WantedBy=multi-user.target
