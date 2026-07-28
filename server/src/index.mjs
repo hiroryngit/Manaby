@@ -9,6 +9,12 @@
 
 import { createServer } from 'node:http';
 import { createClient } from '@libsql/client';
+import {
+  loadFreeModels,
+  candidateModels,
+  markRateLimited,
+  statusSnapshot,
+} from './models.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const {
@@ -32,8 +38,20 @@ const routes = {
   'GET /health': async () => {
     // DB まで到達できて初めて healthy とみなす。プロセスの生存だけでは不十分
     const r = await db.execute('select sqlite_version() as v');
-    return { ok: true, db: 'up', sqlite: r.rows[0].v, model: OPENROUTER_MODEL };
+    return {
+      ok: true,
+      db: 'up',
+      sqlite: r.rows[0].v,
+      preferred_model: OPENROUTER_MODEL,
+      ...statusSnapshot(),
+    };
   },
+
+  // 利用可能な無料モデルの一覧と、現在スキップ中のモデル
+  'GET /models': async () => ({
+    free_models: await loadFreeModels(),
+    ...statusSnapshot(),
+  }),
 
   // AI 分析ノート生成（F-10）。授業記録を受け取り OpenRouter に中継する
   'POST /ai/report': async (body) => {
@@ -48,36 +66,63 @@ const routes = {
       throw err;
     }
 
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
+    const messages = [
+      {
+        role: 'system',
+        content:
+          '家庭教師の授業記録から保護者向けレポートを作成します。' +
+          '専門用語を使わず、1分で読み切れる分量で、' +
+          '「できたこと」「つまずいた点」「今後の方針」を必ず含めてください。',
       },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content:
-              '家庭教師の授業記録から保護者向けレポートを作成します。' +
-              '専門用語を使わず、1分で読み切れる分量で、' +
-              '「できたこと」「つまずいた点」「今後の方針」を必ず含めてください。',
-          },
-          { role: 'user', content: JSON.stringify(body.lessonRecord) },
-        ],
-      }),
-      signal: AbortSignal.timeout(120_000),
-    });
+      { role: 'user', content: JSON.stringify(body.lessonRecord) },
+    ];
 
-    if (!res.ok) {
+    const models = await candidateModels(body.model ?? OPENROUTER_MODEL);
+    const attempts = [];
+
+    for (const model of models) {
+      let res;
+      try {
+        res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model, messages }),
+          signal: AbortSignal.timeout(120_000),
+        });
+      } catch (e) {
+        attempts.push({ model, error: e.message });
+        continue;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? '';
+        // 空応答は成功扱いにしない。次のモデルへ回す
+        if (text.trim()) return { report: text, model, attempts };
+        attempts.push({ model, status: 200, error: 'empty response' });
+        continue;
+      }
+
+      attempts.push({ model, status: res.status });
+      // 429=枠切れ / 5xx=上流障害 は他モデルで回復しうるので次を試す
+      if (res.status === 429 || res.status >= 500) {
+        if (res.status === 429) markRateLimited(model);
+        continue;
+      }
+      // 401(キー不正) や 400(リクエスト不正) はモデルを変えても直らない
       const err = new Error(`OpenRouter がエラーを返しました: ${res.status}`);
-      err.status = 502;
+      err.status = res.status === 401 ? 500 : 502;
       err.detail = await res.text().catch(() => '');
       throw err;
     }
-    const data = await res.json();
-    return { report: data.choices?.[0]?.message?.content ?? '' };
+
+    const err = new Error(`利用可能な無料モデルがありません（${attempts.length}件すべて失敗）`);
+    err.status = 503;
+    err.detail = JSON.stringify(attempts);
+    throw err;
   },
 };
 
