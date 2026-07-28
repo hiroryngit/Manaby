@@ -36,6 +36,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# graphify (derived artifacts - rebuilt by the post-commit hook)
+graphify-out/
+
 # generated native folders
 /ios
 /android
