@@ -21,8 +21,12 @@ manaby.duckdns.org {
 		header {
 			Access-Control-Allow-Origin "{re.origin.0}"
 			Access-Control-Allow-Methods "GET, POST, OPTIONS"
-			Access-Control-Allow-Headers "Content-Type"
-			Access-Control-Max-Age "86400"
+			# Authorization は管理 API（/admin/*）が使う。ここに無いと
+			# ブラウザが送信前に弾き、アプリ側には「接続できない」としか見えない
+			Access-Control-Allow-Headers "Content-Type, Authorization"
+			# 短くしておく。長いとこの許可リストを変えたときブラウザ側の
+			# キャッシュが切れるまで（Chrome は最大2時間）古い判定が残る
+			Access-Control-Max-Age "600"
 			Vary "Origin"
 		}
 		respond 204
