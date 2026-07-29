@@ -8,21 +8,11 @@
 //      API キーをアプリのバンドルに含めないため。
 
 import { createServer } from 'node:http';
-import { createClient } from '@libsql/client';
-import {
-  loadFreeModels,
-  candidateModels,
-  markRateLimited,
-  statusSnapshot,
-} from './models.mjs';
+import { routes } from './routes.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const {
-  TURSO_DATABASE_URL,
-  TURSO_AUTH_TOKEN,
-  OPENROUTER_API_KEY,
-  OPENROUTER_MODEL = 'google/gemma-4-31b-it:free',
-} = process.env;
+// Caddy(443) からのみ到達させる。0.0.0.0 で待つと 8787 が直接叩けてしまう
+const HOST = process.env.BIND_HOST ?? '127.0.0.1';
 
 const missing = ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN'].filter((k) => !process.env[k]);
 if (missing.length) {
@@ -30,103 +20,27 @@ if (missing.length) {
   process.exit(1);
 }
 
-const db = createClient({ url: TURSO_DATABASE_URL, authToken: TURSO_AUTH_TOKEN });
+// `GET /users/:id/notifications` のようなパターンを正規表現に変換しておく
+const table = Object.entries(routes).map(([pattern, handler]) => {
+  const [method, path] = pattern.split(' ');
+  const names = [];
+  const source = path.replace(/:([A-Za-z_]+)/g, (_, name) => {
+    names.push(name);
+    return '([^/]+)';
+  });
+  return { method, regexp: new RegExp(`^${source}$`), names, handler };
+});
 
-// --- ルーティング ------------------------------------------------------------
-
-const routes = {
-  'GET /health': async () => {
-    // DB まで到達できて初めて healthy とみなす。プロセスの生存だけでは不十分
-    const r = await db.execute('select sqlite_version() as v');
-    return {
-      ok: true,
-      db: 'up',
-      sqlite: r.rows[0].v,
-      preferred_model: OPENROUTER_MODEL,
-      ...statusSnapshot(),
-    };
-  },
-
-  // 利用可能な無料モデルの一覧と、現在スキップ中のモデル
-  'GET /models': async () => ({
-    free_models: await loadFreeModels(),
-    ...statusSnapshot(),
-  }),
-
-  // AI 分析ノート生成（F-10）。授業記録を受け取り OpenRouter に中継する
-  'POST /ai/report': async (body) => {
-    if (!OPENROUTER_API_KEY) {
-      const err = new Error('OPENROUTER_API_KEY が未設定です');
-      err.status = 503;
-      throw err;
-    }
-    if (!body?.lessonRecord) {
-      const err = new Error('lessonRecord がリクエストに含まれていません');
-      err.status = 400;
-      throw err;
-    }
-
-    const messages = [
-      {
-        role: 'system',
-        content:
-          '家庭教師の授業記録から保護者向けレポートを作成します。' +
-          '専門用語を使わず、1分で読み切れる分量で、' +
-          '「できたこと」「つまずいた点」「今後の方針」を必ず含めてください。',
-      },
-      { role: 'user', content: JSON.stringify(body.lessonRecord) },
-    ];
-
-    const models = await candidateModels(body.model ?? OPENROUTER_MODEL);
-    const attempts = [];
-
-    for (const model of models) {
-      let res;
-      try {
-        res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ model, messages }),
-          signal: AbortSignal.timeout(120_000),
-        });
-      } catch (e) {
-        attempts.push({ model, error: e.message });
-        continue;
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.choices?.[0]?.message?.content ?? '';
-        // 空応答は成功扱いにしない。次のモデルへ回す
-        if (text.trim()) return { report: text, model, attempts };
-        attempts.push({ model, status: 200, error: 'empty response' });
-        continue;
-      }
-
-      attempts.push({ model, status: res.status });
-      // 429=枠切れ / 5xx=上流障害 は他モデルで回復しうるので次を試す
-      if (res.status === 429 || res.status >= 500) {
-        if (res.status === 429) markRateLimited(model);
-        continue;
-      }
-      // 401(キー不正) や 400(リクエスト不正) はモデルを変えても直らない
-      const err = new Error(`OpenRouter がエラーを返しました: ${res.status}`);
-      err.status = res.status === 401 ? 500 : 502;
-      err.detail = await res.text().catch(() => '');
-      throw err;
-    }
-
-    const err = new Error(`利用可能な無料モデルがありません（${attempts.length}件すべて失敗）`);
-    err.status = 503;
-    err.detail = JSON.stringify(attempts);
-    throw err;
-  },
-};
-
-// --- HTTP サーバー -----------------------------------------------------------
+function match(method, pathname) {
+  for (const r of table) {
+    if (r.method !== method) continue;
+    const m = pathname.match(r.regexp);
+    if (!m) continue;
+    const params = Object.fromEntries(r.names.map((n, i) => [n, decodeURIComponent(m[i + 1])]));
+    return { handler: r.handler, params };
+  }
+  return null;
+}
 
 const server = createServer(async (req, res) => {
   const send = (status, payload) => {
@@ -134,28 +48,34 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(payload));
   };
 
-  const handler = routes[`${req.method} ${req.url.split('?')[0]}`];
-  if (!handler) return send(404, { error: 'not found' });
+  const url = new URL(req.url, 'http://localhost');
+  // HEAD は GET と同じ経路を通す（外形監視ツールが使うため）
+  const method = req.method === 'HEAD' ? 'GET' : req.method;
+  const route = match(method, url.pathname);
+  if (!route) return send(404, { error: 'not found' });
 
   try {
     let body;
-    if (req.method === 'POST') {
+    if (method === 'POST') {
       const chunks = [];
       for await (const c of req) chunks.push(c);
       const raw = Buffer.concat(chunks).toString();
       body = raw ? JSON.parse(raw) : undefined;
     }
-    send(200, await handler(body));
+    const result = await route.handler(body, route.params, url.searchParams);
+    if (req.method === 'HEAD') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end();
+    }
+    send(200, result ?? { ok: true });
   } catch (e) {
     // 意図しない例外の詳細はクライアントに返さない（情報漏洩を避ける）
     const status = e.status ?? 500;
-    console.error(`[error] ${req.method} ${req.url}`, e.message, e.detail ?? '');
+    console.error(`[error] ${req.method} ${url.pathname}`, e.message, e.detail ?? '');
     send(status, { error: status === 500 ? 'internal error' : e.message });
   }
 });
 
-// Caddy(443) からのみ到達させる。0.0.0.0 で待つと 8787 が直接叩けてしまう
-const HOST = process.env.BIND_HOST ?? '127.0.0.1';
 server.listen(PORT, HOST, () => console.log(`[manaby-api] listening on ${HOST}:${PORT}`));
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
