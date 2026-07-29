@@ -154,7 +154,9 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`[manaby-api] listening on :${PORT}`));
+// Caddy(443) からのみ到達させる。0.0.0.0 で待つと 8787 が直接叩けてしまう
+const HOST = process.env.BIND_HOST ?? '127.0.0.1';
+server.listen(PORT, HOST, () => console.log(`[manaby-api] listening on ${HOST}:${PORT}`));
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => server.close(() => process.exit(0)));

@@ -1,0 +1,36 @@
+# manaby API のリバースプロキシ
+#
+# Let's Encrypt の証明書取得・更新は Caddy が自動で行う（設定不要）。
+# API 本体(8787)は 127.0.0.1 のみで待ち受け、外部からは必ずここを経由させる。
+
+manaby.duckdns.org {
+	encode gzip
+
+	# Vercel 上のフロントエンドからの呼び出しを許可する。
+	# 本番のドメインが確定したら、その URL に絞ること。
+	@cors_preflight method OPTIONS
+	handle @cors_preflight {
+		header {
+			Access-Control-Allow-Origin "*"
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type"
+			Access-Control-Max-Age "86400"
+		}
+		respond 204
+	}
+
+	handle {
+		header Access-Control-Allow-Origin "*"
+		reverse_proxy 127.0.0.1:8787 {
+			# AI 生成は最大120秒かかるため、既定値では途中で切れる
+			transport http {
+				response_header_timeout 180s
+				dial_timeout 10s
+			}
+		}
+	}
+
+	# ログは journald に出す（caddy の systemd unit は /var/log へ書けないため）。
+	# 参照: journalctl -u caddy
+	log
+}
