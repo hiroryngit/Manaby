@@ -6,21 +6,33 @@
 manaby.duckdns.org {
 	encode gzip
 
-	# Vercel 上のフロントエンドからの呼び出しを許可する。
-	# 本番のドメインが確定したら、その URL に絞ること。
-	@cors_preflight method OPTIONS
+	# 許可するのは自分の Vercel プロジェクトのみ。
+	#   manaby-six.vercel.app                     … 本番（manaby.vercel.app は他アカウントが使用中）
+	#   manaby-*-hiroryngits-projects.vercel.app  … プレビュー（デプロイ毎に URL が変わる）
+	# 一致した Origin をそのまま返す。ワイルドカード(*)にすると任意のサイトから
+	# API を叩けてしまうため使わない。
+	@allowed_origin header_regexp origin Origin ^https://(manaby-six\.vercel\.app|manaby[-a-z0-9]*-hiroryngits-projects\.vercel\.app)$
+
+	@cors_preflight {
+		method OPTIONS
+		header_regexp origin Origin ^https://(manaby-six\.vercel\.app|manaby[-a-z0-9]*-hiroryngits-projects\.vercel\.app)$
+	}
 	handle @cors_preflight {
 		header {
-			Access-Control-Allow-Origin "*"
+			Access-Control-Allow-Origin "{re.origin.0}"
 			Access-Control-Allow-Methods "GET, POST, OPTIONS"
 			Access-Control-Allow-Headers "Content-Type"
 			Access-Control-Max-Age "86400"
+			Vary "Origin"
 		}
 		respond 204
 	}
 
 	handle {
-		header Access-Control-Allow-Origin "*"
+		header @allowed_origin {
+			Access-Control-Allow-Origin "{re.origin.0}"
+			Vary "Origin"
+		}
 		reverse_proxy 127.0.0.1:8787 {
 			# AI 生成は最大120秒かかるため、既定値では途中で切れる
 			transport http {

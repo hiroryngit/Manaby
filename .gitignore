@@ -50,3 +50,5 @@ graphify-out/
 
 dist/
 .vercel/
+.vercel
+.env*
