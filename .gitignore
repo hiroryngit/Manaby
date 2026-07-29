@@ -47,3 +47,6 @@ graphify-out/
 
 # ssh public keys (private *.key already ignored above)
 *.key.pub
+
+dist/
+.vercel/
