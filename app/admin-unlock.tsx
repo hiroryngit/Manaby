@@ -11,7 +11,7 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { GOOGLE_READY, signInWithGoogle } from '../src/auth';
-import { useSession } from '../src/session';
+import { homeRoute, useSession } from '../src/session';
 import { Button, Card, ScreenHeader, SectionTitle } from '../src/components/ui';
 import { colors, font, space } from '../src/theme';
 
@@ -46,7 +46,8 @@ export default function AdminUnlock() {
     setError(null);
     try {
       await deactivateAdmin();
-      router.replace(user?.role === 'tutor' ? '/(tutor)' : '/(parent)');
+      // 管理者だけで作られたアカウントは、権限を降ろすと行き先が無い。homeRoute が合言葉画面へ戻す
+      router.replace(homeRoute({ ...user!, is_admin: false }));
     } catch (e) {
       setError(e instanceof Error ? e.message : '解除に失敗しました');
     } finally {

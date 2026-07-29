@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SessionProvider, useSession } from '../src/session';
+import { SessionProvider, homeRoute, useSession } from '../src/session';
 import { Loading } from '../src/components/ui';
 import { colors, font } from '../src/theme';
 
@@ -26,10 +26,10 @@ function Guard() {
       return;
     }
 
-    // 講師と保護者/生徒で入口が違う。
-    // 管理者は「役割」ではなく属性なので、role が admin のアカウントだけを
-    // 管理画面に着地させる。保護者や講師が兼任している場合は普段の画面のままにする。
-    const home = user.role === 'admin' ? '/(admin)' : user.role === 'tutor' ? '/(tutor)' : '/(parent)';
+    // 入口はロールで違う。管理者は「役割」ではなく属性なので、
+    // 管理画面に着地させるのは合言葉だけで作られたアカウント（role が admin）のみ。
+    // 保護者や講師が兼任している場合は普段の画面のままにする。
+    const home = homeRoute(user);
     if (group === 'login' || group === 'onboarding' || group === undefined) {
       router.replace(home);
       return;

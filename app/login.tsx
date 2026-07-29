@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { api, type User } from '../src/api';
 import { GOOGLE_READY, signInWithGoogle } from '../src/auth';
-import { useSession } from '../src/session';
+import { homeRoute, useSession } from '../src/session';
 import { Badge, Button, Card, Row, type Tone } from '../src/components/ui';
 import { colors, font, radius, space } from '../src/theme';
 
@@ -28,13 +28,17 @@ export default function Login() {
     setError(null);
     try {
       const idToken = await signInWithGoogle();
-      const existing = await resolveAccount(idToken);
-      if (existing) {
+      const { user, profile } = await resolveAccount(idToken);
+      if (user) {
         // 2回目以降。役割は登録時のものが使われ、選び直しは発生しない
-        await signIn(existing);
-        router.replace(existing.role === 'tutor' ? '/(tutor)' : '/(parent)');
+        await signIn(user);
+        router.replace(homeRoute(user));
       } else {
-        router.replace({ pathname: '/onboarding', params: { idToken } });
+        // 初回。Google 側の氏名を初期値として渡し、そのまま使えるようにする
+        router.replace({
+          pathname: '/onboarding',
+          params: { idToken, name: profile?.name ?? '' },
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ログインに失敗しました');
@@ -82,7 +86,7 @@ export default function Login() {
                   key={u.id}
                   onPress={async () => {
                     await signIn(u);
-                    router.replace(u.role === 'tutor' ? '/(tutor)' : '/(parent)');
+                    router.replace(homeRoute(u));
                   }}
                 >
                   <Row style={{ justifyContent: 'space-between' }}>

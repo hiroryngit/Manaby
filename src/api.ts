@@ -58,6 +58,20 @@ export type Role = 'parent' | 'student' | 'tutor' | 'admin';
  */
 export type User = { id: string; display_name: string; role: Role; is_admin?: boolean };
 
+/**
+ * 初回登録で聞くプロフィール。役割ごとに使う欄が違うが、
+ * 画面側の状態をそのまま送れるよう1つの型にまとめる（サーバーが役割で取捨する）。
+ */
+export type RegistrationProfile = {
+  display_name: string;
+  phone: string;
+  grade: string;
+  school_name: string;
+  subjects: string[];
+  bio: string;
+  policy: string;
+};
+
 export type AdminUser = {
   id: string;
   email: string;

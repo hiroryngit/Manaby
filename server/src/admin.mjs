@@ -9,7 +9,7 @@
 // 代わりにアクティベート時に自前のトークンを発行し、ハッシュだけを DB に置く。
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { one, run } from './db.mjs';
+import { newId, one, run } from './db.mjs';
 import { verifyIdToken } from './google.mjs';
 
 const PASSWORD = process.env.ADMIN_ACTIVATION_PASSWORD;
@@ -78,6 +78,10 @@ async function issueToken(userId) {
 /**
  * 合言葉で管理者属性を立てる。
  * ここを通れる条件は「Google の ID トークンが検証できる」かつ「合言葉が一致する」の両方。
+ *
+ * 初回ログインで合言葉を入れた場合は、役割の選択もプロフィール入力も踏ませずに
+ * ここでアカウントを作る。管理者は講師一覧にも学習カルテにも出ないので、
+ * 埋めるべきプロフィール項目がそもそも無い。
  */
 export async function activate({ id_token, password }) {
   if (!PASSWORD) throw bad(503, 'サーバー側に管理者の合言葉が設定されていません');
@@ -85,26 +89,39 @@ export async function activate({ id_token, password }) {
   const identity = await verifyIdToken(id_token);
   assertNotLocked(identity.uid);
 
-  const user = await one(
-    'select id, display_name, role, is_admin from users where auth_uid = ?',
-    [identity.uid],
-  );
-  // 未登録の Google アカウントには付けない。役割を先に決めさせる
-  if (!user) throw bad(404, '先に利用者登録を済ませてください');
-
+  // 照合はアカウントを作る前に済ませる。合言葉が違うのに行が増えてはいけない
   if (!passwordMatches(password)) {
     recordFailure(identity.uid);
     throw bad(401, '合言葉が違います');
   }
   failures.delete(identity.uid);
 
-  await run(
-    `update users set is_admin = 1,
-       admin_activated_at = coalesce(admin_activated_at, datetime('now')),
-       updated_at = datetime('now')
-     where id = ?`,
-    [user.id],
+  let user = await one(
+    'select id, display_name, role, is_admin from users where auth_uid = ?',
+    [identity.uid],
   );
+
+  if (user) {
+    // 既に保護者・生徒・講師として登録済みなら、その役割は保ったまま属性だけ足す
+    await run(
+      `update users set is_admin = 1,
+         admin_activated_at = coalesce(admin_activated_at, datetime('now')),
+         updated_at = datetime('now')
+       where id = ?`,
+      [user.id],
+    );
+  } else {
+    const byEmail = await one('select id from users where email = ?', [identity.email]);
+    if (byEmail) throw bad(409, 'このメールアドレスは既に登録されています');
+
+    const id = newId();
+    await run(
+      `insert into users (id, email, display_name, role, auth_uid, is_admin, admin_activated_at)
+       values (?,?,?,'admin',?,1, datetime('now'))`,
+      [id, identity.email, identity.displayName, identity.uid],
+    );
+    user = { id, display_name: identity.displayName, role: 'admin' };
+  }
 
   const { token, expiresAt } = await issueToken(user.id);
   return {

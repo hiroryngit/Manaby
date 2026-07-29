@@ -449,12 +449,12 @@ export const routes = {
       : { needs_onboarding: true, profile: { email: identity.email, name: identity.displayName } };
   },
 
-  // 初回登録。役割はここでのみ決まり、以後変更できない。
+  // 初回登録。役割とプロフィールはここでのみ決まり、役割は以後変更できない。
   // 登録済みの auth_uid で再度呼ばれても、保存済みの役割をそのまま返す。
   'POST /auth/register': async (b) => {
     const identity = await verifyIdToken(b?.id_token);
     if (!b?.role) throw bad(400, 'role は必須です');
-    // admin は自己登録させない
+    // admin は役割として選ばせない。合言葉を通る経路（/auth/admin/activate）だけで付く
     if (!['parent', 'student', 'tutor'].includes(b.role)) {
       throw bad(400, '役割は 保護者 / 生徒 / 講師 のいずれかです');
     }
@@ -469,20 +469,61 @@ export const routes = {
     const byEmail = await one('select id, auth_uid from users where email = ?', [identity.email]);
     if (byEmail) throw bad(409, 'このメールアドレスは既に登録されています');
 
-    const id = newId();
-    await run(
-      'insert into users (id, email, display_name, role, auth_uid) values (?,?,?,?,?)',
-      [id, identity.email, identity.displayName, b.role, identity.uid],
-    );
+    // プロフィールは画面が実際に読む項目だけを必須にする。
+    // 空のまま通すと、講師一覧に科目の無い講師が並び、カルテに学年の無い生徒が出る。
+    //
+    // 検証は users を作る前に全部終わらせる。途中で弾くと auth_uid だけ登録済みの
+    // 利用者が残り、次の登録は「登録済み」と判定されてプロフィールを永久に持てなくなる。
+    const profile = b.profile ?? {};
+    const text = (v) => (typeof v === 'string' ? v.trim() : '');
+    const must = (value, message) => {
+      if (!value) throw bad(400, message);
+      return value;
+    };
 
-    // 役割ごとのプロフィール行を作る
-    if (b.role === 'parent') await run('insert into parent_profiles (user_id) values (?)', [id]);
-    if (b.role === 'student') await run('insert into student_profiles (user_id) values (?)', [id]);
-    if (b.role === 'tutor') {
-      await run('insert into tutor_profiles (user_id, subjects) values (?, ?)', [id, '[]']);
+    // 表示名は Google のものを既定にしつつ、本人が直したものがあれば優先する
+    const displayName = text(profile.display_name) || identity.displayName;
+    let profileSql;
+
+    if (b.role === 'parent') {
+      profileSql = {
+        sql: 'insert into parent_profiles (user_id, phone) values (?,?)',
+        args: [must(text(profile.phone), '電話番号を入力してください')],
+      };
+    } else if (b.role === 'student') {
+      profileSql = {
+        sql: 'insert into student_profiles (user_id, grade, school_name) values (?,?,?)',
+        args: [
+          must(text(profile.grade), '学年を入力してください'),
+          text(profile.school_name) || null,
+        ],
+      };
+    } else {
+      const subjects = Array.isArray(profile.subjects)
+        ? profile.subjects.filter((s) => typeof s === 'string' && s.trim())
+        : [];
+      if (subjects.length === 0) throw bad(400, '担当科目を1つ以上選んでください');
+      profileSql = {
+        sql: 'insert into tutor_profiles (user_id, bio, subjects, policy) values (?,?,?,?)',
+        args: [
+          must(text(profile.bio), '経歴・自己紹介を入力してください'),
+          JSON.stringify(subjects),
+          must(text(profile.policy), '指導方針を入力してください'),
+        ],
+      };
     }
 
-    return { user: { id, display_name: identity.displayName, role: b.role, is_admin: false } };
+    const id = newId();
+    await run('insert into users (id, email, display_name, role, auth_uid) values (?,?,?,?,?)', [
+      id,
+      identity.email,
+      displayName,
+      b.role,
+      identity.uid,
+    ]);
+    await run(profileSql.sql, [id, ...profileSql.args]);
+
+    return { user: { id, display_name: displayName, role: b.role, is_admin: false } };
   },
 
   // --- 管理者（F-12） --------------------------------------------------------

@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { api, type AdminUser, type Role } from '../../src/api';
 import { useFetch } from '../../src/hooks';
 import { confirmDestructive } from '../../src/dialog';
-import { useSession } from '../../src/session';
+import { homeRoute, useSession } from '../../src/session';
 import {
   Avatar, Badge, Button, Card, Empty, ErrorView, Loading, Row, ScreenHeader, Segmented,
 } from '../../src/components/ui';
@@ -121,7 +121,7 @@ export default function AdminUsers() {
               variant="ghost"
               onPress={async () => {
                 await deactivateAdmin();
-                router.replace(user?.role === 'tutor' ? '/(tutor)' : '/(parent)');
+                router.replace(homeRoute({ ...user!, is_admin: false }));
               }}
             />
           </View>
