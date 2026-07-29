@@ -13,9 +13,51 @@ const CLIENT_ID = process.env.GOOGLE_WEB_CLIENT_ID;
 const AUDIENCES = [CLIENT_ID, process.env.GOOGLE_IOS_CLIENT_ID, process.env.GOOGLE_ANDROID_CLIENT_ID]
   .filter(Boolean);
 
+const CLIENT_SECRET = process.env.GOOGLE_WEB_CLIENT_SECRET;
+
 const client = new OAuth2Client();
 
 export const GOOGLE_CONFIGURED = AUDIENCES.length > 0;
+
+/**
+ * 認可コードを ID トークンに交換する。
+ *
+ * Google の「ウェブアプリケーション」クライアントは PKCE を使っていても
+ * client_secret を要求する。secret は配布物に含められないので、
+ * 交換だけをサーバーで代行し、アプリには ID トークンだけを返す。
+ */
+export async function exchangeCode({ code, codeVerifier, redirectUri }) {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    throw Object.assign(new Error('サーバー側に Google の資格情報が未設定です'), { status: 503 });
+  }
+  for (const [k, v] of Object.entries({ code, codeVerifier, redirectUri })) {
+    if (!v) throw Object.assign(new Error(`${k} が必要です`), { status: 400 });
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+      code_verifier: codeVerifier,
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.id_token) {
+    throw Object.assign(new Error('Google とのトークン交換に失敗しました'), {
+      status: 401,
+      // Google が返す error_description は原因特定に有用なのでログにだけ残す
+      detail: JSON.stringify(data),
+    });
+  }
+  return data.id_token;
+}
 
 /**
  * ID トークンを検証し、確認済みの身元を返す。

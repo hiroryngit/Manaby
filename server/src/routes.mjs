@@ -3,7 +3,7 @@
 import { all, one, run, parseJson, newId } from './db.mjs';
 import { generateReport, generateHomework } from './ai.mjs';
 import { loadFreeModels, statusSnapshot } from './models.mjs';
-import { verifyIdToken } from './google.mjs';
+import { verifyIdToken, exchangeCode } from './google.mjs';
 
 const bad = (status, message) => Object.assign(new Error(message), { status });
 
@@ -422,6 +422,15 @@ export const routes = {
   //
   // 身元は必ず Google の ID トークンから取り出す。
   // クライアントが送ってきた uid / email / 氏名は信用しない。
+
+  // 認可コードを ID トークンに交換する。client_secret をアプリに置かないための中継。
+  'POST /auth/google/exchange': async (b) => ({
+    id_token: await exchangeCode({
+      code: b?.code,
+      codeVerifier: b?.code_verifier,
+      redirectUri: b?.redirect_uri,
+    }),
+  }),
 
   // Google ログイン後に呼ぶ。登録済みならその利用者を、未登録なら初回登録が必要な旨を返す
   'POST /auth/session': async (b) => {

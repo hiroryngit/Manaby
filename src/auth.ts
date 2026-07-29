@@ -5,6 +5,7 @@
 
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { api } from './api';
 
 // ログイン用に開いたブラウザを、認証完了後に自動で閉じる
 WebBrowser.maybeCompleteAuthSession();
@@ -53,18 +54,15 @@ export async function signInWithGoogle(): Promise<string> {
     throw new Error(detail ?? 'ログインに失敗しました');
   }
 
-  // 認可コードを ID トークンに交換する。公開クライアントなので secret は送らない
-  const token = await AuthSession.exchangeCodeAsync(
-    {
-      clientId: WEB_CLIENT_ID!,
-      code: result.params.code,
-      redirectUri: redirectUri(),
-      extraParams: { code_verifier: request.codeVerifier ?? '' },
-    },
-    DISCOVERY,
-  );
+  // Google の「ウェブアプリケーション」クライアントは PKCE を使っていても
+  // client_secret を要求する。secret は配布物に置けないため、
+  // 交換はサーバーに代行させ、アプリは ID トークンだけを受け取る。
+  const { id_token } = await api.post<{ id_token: string }>('/auth/google/exchange', {
+    code: result.params.code,
+    code_verifier: request.codeVerifier,
+    redirect_uri: redirectUri(),
+  });
 
-  const idToken = token.idToken;
-  if (!idToken) throw new Error('Google から ID トークンを取得できませんでした');
-  return idToken;
+  if (!id_token) throw new Error('Google から ID トークンを取得できませんでした');
+  return id_token;
 }
