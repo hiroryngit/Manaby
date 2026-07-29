@@ -1,13 +1,11 @@
-// ログイン状態。
+// ログイン状態と、閲覧対象の生徒の解決。
 //
-// 本来は Firebase Auth の Google ログインで得た uid を users.auth_uid と
-// 突き合わせる想定（README 第9章）。まだ Google の OAuth クライアント ID が
-// 未取得のため、当面は利用者を一覧から選ぶ方式にしている。
-// signIn() の中身を Firebase の呼び出しに差し替えれば他の画面は変更不要。
+// 役割は初回登録時にのみ決まり、以後変更できない（サーバー側で保存され、
+// 変更する API を用意していない）。クライアントに役割変更の導線も置かない。
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { User } from './api';
+import { api, type Role, type User } from './api';
 
 const STORAGE_KEY = 'manaby.session';
 
@@ -16,14 +14,18 @@ type SessionValue = {
   ready: boolean;
   signIn: (user: User) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Google の identity から既存アカウントを引く。未登録なら null */
+  resolveAccount: (authUid: string) => Promise<User | null>;
+  /** 初回登録。ここで決めた役割は以後変更できない */
+  register: (input: {
+    authUid: string;
+    email: string;
+    displayName: string;
+    role: Exclude<Role, 'admin'>;
+  }) => Promise<User>;
 };
 
-const SessionContext = createContext<SessionValue>({
-  user: null,
-  ready: false,
-  signIn: async () => {},
-  signOut: async () => {},
-});
+const SessionContext = createContext<SessionValue>(null as unknown as SessionValue);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -47,8 +49,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(STORAGE_KEY);
   };
 
+  const resolveAccount = async (authUid: string) => {
+    const res = await api.post<{ user?: User; needs_onboarding?: boolean }>('/auth/session', {
+      auth_uid: authUid,
+    });
+    return res.user ?? null;
+  };
+
+  const register: SessionValue['register'] = async ({ authUid, email, displayName, role }) => {
+    const res = await api.post<{ user: User }>('/auth/register', {
+      auth_uid: authUid,
+      email,
+      display_name: displayName,
+      role,
+    });
+    await signIn(res.user);
+    return res.user;
+  };
+
   return (
-    <SessionContext.Provider value={{ user, ready, signIn, signOut }}>
+    <SessionContext.Provider value={{ user, ready, signIn, signOut, resolveAccount, register }}>
       {children}
     </SessionContext.Provider>
   );
@@ -57,13 +77,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 export const useSession = () => useContext(SessionContext);
 
 /**
- * 保護者は自分の子（生徒）のデータを見る。生徒は自分自身。
- * MVP では保護者1人に生徒1人を紐づけたデモデータのため固定で解決している。
+ * 閲覧対象の生徒 ID。
+ * 生徒本人はそのまま自分、保護者は紐づく子の先頭を見る。
+ * 子がまだ登録されていない保護者は null になり、画面側で案内を出す。
  */
-export function useViewingStudentId(): string | null {
+export function useViewingStudentId(): { studentId: string | null; loading: boolean } {
   const { user } = useSession();
-  if (!user) return null;
-  if (user.role === 'student') return user.id;
-  if (user.role === 'parent') return 'u-student-1';
-  return null;
+  const [studentId, setStudentId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return setStudentId(null);
+    if (user.role === 'student') return setStudentId(user.id);
+    if (user.role !== 'parent') return setStudentId(null);
+
+    setLoading(true);
+    api
+      .get<{ id: string }[]>(`/users/${user.id}/children`)
+      .then((kids) => setStudentId(kids[0]?.id ?? null))
+      .catch(() => setStudentId(null))
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  return { studentId, loading };
 }

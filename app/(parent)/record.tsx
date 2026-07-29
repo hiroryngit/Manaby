@@ -12,11 +12,13 @@ import { colors, font, levelColor, radius, space } from '../../src/theme';
 
 export default function RecordScreen() {
   const router = useRouter();
-  const studentId = useViewingStudentId();
+  const { studentId, loading: resolvingStudent } = useViewingStudentId();
   const { data, error, reload } = useFetch<LearningRecord>(
     studentId ? `/students/${studentId}/record` : null,
   );
 
+  if (!resolvingStudent && !studentId)
+    return <Empty message="お子さまのアカウントがまだ紐づいていません。管理者にお問い合わせください。" />;
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
 

@@ -17,7 +17,7 @@ function notify(message: string) {
 
 export default function TutorProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const studentId = useViewingStudentId();
+  const { studentId, loading: resolvingStudent } = useViewingStudentId();
   const { data, error, reload } = useFetch<TutorDetail>(id ? `/tutors/${id}` : null);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [requested, setRequested] = useState<string[]>([]);

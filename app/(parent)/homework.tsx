@@ -17,13 +17,15 @@ const STATUS = {
 };
 
 export default function HomeworkScreen() {
-  const studentId = useViewingStudentId();
+  const { studentId, loading: resolvingStudent } = useViewingStudentId();
   const { data, error, loading, reload, setData } = useFetch<Homework[]>(
     studentId ? `/students/${studentId}/homework` : null,
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  if (!resolvingStudent && !studentId)
+    return <Empty message="お子さまのアカウントがまだ紐づいていません。管理者にお問い合わせください。" />;
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
 

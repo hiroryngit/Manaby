@@ -417,6 +417,64 @@ export const routes = {
     return OK;
   },
 
+  // --- 認証（F-01） ----------------------------------------------------------
+
+  // Google ログイン後に呼ぶ。登録済みならその利用者を、未登録なら初回登録が必要な旨を返す
+  'POST /auth/session': async (b) => {
+    if (!b?.auth_uid) throw bad(400, 'auth_uid は必須です');
+    const user = await one(
+      'select id, display_name, role from users where auth_uid = ?',
+      [b.auth_uid],
+    );
+    return user ? { user } : { needs_onboarding: true };
+  },
+
+  // 初回登録。役割はここでのみ決まり、以後変更できない。
+  // 登録済みの auth_uid で再度呼ばれても、保存済みの役割をそのまま返す。
+  'POST /auth/register': async (b) => {
+    for (const f of ['auth_uid', 'email', 'display_name', 'role']) {
+      if (!b?.[f]) throw bad(400, `${f} は必須です`);
+    }
+    // admin は自己登録させない
+    if (!['parent', 'student', 'tutor'].includes(b.role)) {
+      throw bad(400, '役割は 保護者 / 生徒 / 講師 のいずれかです');
+    }
+
+    const existing = await one(
+      'select id, display_name, role from users where auth_uid = ?',
+      [b.auth_uid],
+    );
+    if (existing) return { user: existing, already_registered: true };
+
+    // 同じメールで別の auth_uid が既にある場合は乗っ取りになるため拒否する
+    const byEmail = await one('select id, auth_uid from users where email = ?', [b.email]);
+    if (byEmail) throw bad(409, 'このメールアドレスは既に登録されています');
+
+    const id = newId();
+    await run(
+      'insert into users (id, email, display_name, role, auth_uid) values (?,?,?,?,?)',
+      [id, b.email, b.display_name, b.role, b.auth_uid],
+    );
+
+    // 役割ごとのプロフィール行を作る
+    if (b.role === 'parent') await run('insert into parent_profiles (user_id) values (?)', [id]);
+    if (b.role === 'student') await run('insert into student_profiles (user_id) values (?)', [id]);
+    if (b.role === 'tutor') {
+      await run('insert into tutor_profiles (user_id, subjects) values (?, ?)', [id, '[]']);
+    }
+
+    return { user: { id, display_name: b.display_name, role: b.role } };
+  },
+
+  // 保護者に紐づく生徒。保護者アカウントがどの生徒を見るかの解決に使う
+  'GET /users/:id/children': async (_b, { id }) =>
+    all(
+      `select u.id, u.display_name, s.grade from users u
+       join student_profiles s on s.user_id = u.id
+       where s.parent_id = ? order by u.display_name`,
+      [id],
+    ),
+
   // --- 開発用: ログインする利用者を選ぶための一覧 ----------------------------
 
   'GET /users': async () =>

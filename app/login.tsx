@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, Image } from 'react-native';
+import { useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { api, type User } from '../src/api';
+import { GOOGLE_READY, signInWithGoogle } from '../src/auth';
 import { useSession } from '../src/session';
-import { Badge, Card, ErrorView, Loading, Row } from '../src/components/ui';
+import { Badge, Button, Card, Row } from '../src/components/ui';
 import { colors, font, space } from '../src/theme';
 
 const ROLE_LABEL: Record<string, { label: string; tone: 'success' | 'brand' | 'warn' | 'neutral' }> = {
@@ -14,18 +16,43 @@ const ROLE_LABEL: Record<string, { label: string; tone: 'success' | 'brand' | 'w
 };
 
 export default function Login() {
-  const { signIn } = useSession();
-  const [users, setUsers] = useState<User[] | null>(null);
+  const router = useRouter();
+  const { signIn, resolveAccount } = useSession();
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [devUsers, setDevUsers] = useState<User[] | null>(null);
 
-  const load = () => {
+  const google = async () => {
+    setBusy(true);
     setError(null);
-    api
-      .get<User[]>('/users')
-      .then(setUsers)
-      .catch((e) => setError(e.message));
+    try {
+      const identity = await signInWithGoogle();
+      const existing = await resolveAccount(identity.uid);
+      if (existing) {
+        // 2回目以降。役割は登録時のものが使われ、選び直しは発生しない
+        await signIn(existing);
+        router.replace(existing.role === 'tutor' ? '/(tutor)' : '/(parent)');
+      } else {
+        router.replace({
+          pathname: '/onboarding',
+          params: { uid: identity.uid, email: identity.email, name: identity.displayName },
+        });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ログインに失敗しました');
+    } finally {
+      setBusy(false);
+    }
   };
-  useEffect(load, []);
+
+  const loadDevUsers = async () => {
+    setError(null);
+    try {
+      setDevUsers(await api.get<User[]>('/users'));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '取得に失敗しました');
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -36,31 +63,47 @@ export default function Login() {
           <Text style={s.lead}>授業の価値を最大化し、学習の習慣化を支援する</Text>
         </View>
 
-        {/* Google ログインは OAuth クライアント ID 取得後に差し替える。
-            それまでは利用者を選んで各ロールの画面を確認できるようにしておく。 */}
-        <Card style={s.notice}>
-          <Text style={s.noticeText}>
-            Google ログインは準備中です。動作確認のため、利用者を選んでお進みください。
-          </Text>
-        </Card>
+        <Button
+          title="Google でログイン"
+          onPress={google}
+          loading={busy}
+          disabled={!GOOGLE_READY}
+        />
 
-        {error && <ErrorView message={error} onRetry={load} />}
-        {!users && !error && <Loading />}
+        {!GOOGLE_READY && (
+          <Card style={s.notice}>
+            <Text style={s.noticeText}>
+              Google ログインは設定待ちです（OAuth クライアント ID が未登録）。
+              動作確認用に、登録済みの利用者でログインできます。
+            </Text>
+          </Card>
+        )}
 
-        {users?.map((u) => {
-          const meta = ROLE_LABEL[u.role] ?? ROLE_LABEL.admin;
-          return (
-            <Card key={u.id} style={s.userCard} onPress={() => signIn(u)}>
-              <Row style={{ justifyContent: 'space-between' }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.name}>{u.display_name}</Text>
-                  <Text style={s.id}>{u.id}</Text>
-                </View>
-                <Badge label={meta.label} tone={meta.tone} />
-              </Row>
-            </Card>
-          );
-        })}
+        {error && <Text style={s.error}>{error}</Text>}
+
+        {/* 開発用の入口。役割はサーバーに保存済みのものが使われ、ここでも選び直しはできない */}
+        {!GOOGLE_READY &&
+          (devUsers ? (
+            devUsers.map((u) => {
+              const meta = ROLE_LABEL[u.role] ?? ROLE_LABEL.admin;
+              return (
+                <Card
+                  key={u.id}
+                  onPress={async () => {
+                    await signIn(u);
+                    router.replace(u.role === 'tutor' ? '/(tutor)' : '/(parent)');
+                  }}
+                >
+                  <Row style={{ justifyContent: 'space-between' }}>
+                    <Text style={s.name}>{u.display_name}</Text>
+                    <Badge label={meta.label} tone={meta.tone} />
+                  </Row>
+                </Card>
+              );
+            })
+          ) : (
+            <Button title="登録済みの利用者を表示" variant="ghost" onPress={loadDevUsers} />
+          ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -74,7 +117,6 @@ const s = StyleSheet.create({
   lead: { ...font.small, color: colors.muted, textAlign: 'center' },
   notice: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoft },
   noticeText: { ...font.small, color: colors.brandInk, lineHeight: 20 },
-  userCard: {},
   name: { ...font.h3, color: colors.text },
-  id: { ...font.tiny, color: colors.faint, marginTop: 2 },
+  error: { ...font.small, color: colors.danger },
 });

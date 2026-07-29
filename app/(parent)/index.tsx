@@ -19,11 +19,13 @@ const STATUS_LABEL = {
 export default function ParentHome() {
   const router = useRouter();
   const { user, signOut } = useSession();
-  const studentId = useViewingStudentId();
+  const { studentId, loading: resolvingStudent } = useViewingStudentId();
   const { data, error, loading, reload } = useFetch<Dashboard>(
     studentId ? `/students/${studentId}/dashboard` : null,
   );
 
+  if (!resolvingStudent && !studentId)
+    return <Empty message="お子さまのアカウントがまだ紐づいていません。管理者にお問い合わせください。" />;
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
 
