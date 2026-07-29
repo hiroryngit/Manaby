@@ -179,3 +179,28 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at);
+
+-- ============================================================
+-- 管理者（F-12）
+-- ============================================================
+--
+-- 役割（role）は初回登録で固定され変更できない。
+-- 管理者はそこに割り込まず「属性」として後から付く ——
+-- 合言葉を知っている人だけが自分で立ち上げる。
+--
+-- ※ 既存 DB には server/db/migrations/002_admin.sql を当てる。
+
+-- users に後付けする列（新規構築時は下の ALTER が効かないため、
+-- 既存環境との差を無くす目的でここに記録だけしておく）:
+--   is_admin           INTEGER NOT NULL DEFAULT 0
+--   admin_activated_at TEXT
+
+-- 管理 API 用のトークン。Google の ID トークンは1時間で切れるため、
+-- 管理操作にはこちらを使う。平文は保存せず SHA-256 のみ持つ。
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash  TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);

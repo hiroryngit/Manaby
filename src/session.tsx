@@ -5,9 +5,10 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, type Role, type User } from './api';
+import { api, setAdminToken, type Role, type User } from './api';
 
 const STORAGE_KEY = 'manaby.session';
+const ADMIN_TOKEN_KEY = 'manaby.adminToken';
 
 type SessionValue = {
   user: User | null;
@@ -18,6 +19,10 @@ type SessionValue = {
   resolveAccount: (idToken: string) => Promise<User | null>;
   /** 初回登録。ここで決めた役割は以後変更できない */
   register: (input: { idToken: string; role: Exclude<Role, 'admin'> }) => Promise<User>;
+  /** 合言葉で管理者属性を立てる。役割は変わらない */
+  activateAdmin: (input: { idToken: string; password: string }) => Promise<User>;
+  /** 管理者属性を自分で降ろす */
+  deactivateAdmin: () => Promise<void>;
 };
 
 const SessionContext = createContext<SessionValue>(null as unknown as SessionValue);
@@ -28,8 +33,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // アプリ再起動後もログイン状態を保つ（F-01 の受け入れ基準）
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => raw && setUser(JSON.parse(raw)))
+    Promise.all([AsyncStorage.getItem(STORAGE_KEY), AsyncStorage.getItem(ADMIN_TOKEN_KEY)])
+      .then(([raw, token]) => {
+        if (raw) setUser(JSON.parse(raw));
+        // 管理トークンは api 側が握る。画面はトークンの存在を意識しない
+        setAdminToken(token);
+      })
       .catch(() => {})
       .finally(() => setReady(true));
   }, []);
@@ -41,7 +50,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     setUser(null);
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    setAdminToken(null);
+    await Promise.all([
+      AsyncStorage.removeItem(STORAGE_KEY),
+      AsyncStorage.removeItem(ADMIN_TOKEN_KEY),
+    ]);
   };
 
   const resolveAccount = async (idToken: string) => {
@@ -58,8 +71,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return res.user;
   };
 
+  const activateAdmin: SessionValue['activateAdmin'] = async ({ idToken, password }) => {
+    const res = await api.post<{ user: User; admin_token: string }>('/auth/admin/activate', {
+      id_token: idToken,
+      password,
+    });
+    setAdminToken(res.admin_token);
+    await AsyncStorage.setItem(ADMIN_TOKEN_KEY, res.admin_token);
+    await signIn(res.user);
+    return res.user;
+  };
+
+  const deactivateAdmin: SessionValue['deactivateAdmin'] = async () => {
+    const res = await api.post<{ user: User }>('/auth/admin/deactivate');
+    setAdminToken(null);
+    await AsyncStorage.removeItem(ADMIN_TOKEN_KEY);
+    await signIn(res.user);
+  };
+
   return (
-    <SessionContext.Provider value={{ user, ready, signIn, signOut, resolveAccount, register }}>
+    <SessionContext.Provider
+      value={{
+        user,
+        ready,
+        signIn,
+        signOut,
+        resolveAccount,
+        register,
+        activateAdmin,
+        deactivateAdmin,
+      }}
+    >
       {children}
     </SessionContext.Provider>
   );
@@ -74,21 +116,26 @@ export const useSession = () => useContext(SessionContext);
  */
 export function useViewingStudentId(): { studentId: string | null; loading: boolean } {
   const { user } = useSession();
-  const [studentId, setStudentId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 初期値は「解決中」。false から始めると、効果が走る前の1フレームだけ
+  // 「お子さまが紐づいていません」が閃く（生徒本人でも出てしまう）
+  const [state, setState] = useState<{ studentId: string | null; loading: boolean }>({
+    studentId: null,
+    loading: true,
+  });
 
   useEffect(() => {
-    if (!user) return setStudentId(null);
-    if (user.role === 'student') return setStudentId(user.id);
-    if (user.role !== 'parent') return setStudentId(null);
+    const done = (studentId: string | null) => setState({ studentId, loading: false });
 
-    setLoading(true);
+    if (!user) return done(null);
+    if (user.role === 'student') return done(user.id);
+    if (user.role !== 'parent') return done(null);
+
+    setState({ studentId: null, loading: true });
     api
       .get<{ id: string }[]>(`/users/${user.id}/children`)
-      .then((kids) => setStudentId(kids[0]?.id ?? null))
-      .catch(() => setStudentId(null))
-      .finally(() => setLoading(false));
+      .then((kids) => done(kids[0]?.id ?? null))
+      .catch(() => done(null));
   }, [user]);
 
-  return { studentId, loading };
+  return state;
 }

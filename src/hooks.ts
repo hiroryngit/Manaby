@@ -39,3 +39,15 @@ export function formatDate(value: string | null | undefined) {
   if (Number.isNaN(d.getTime())) return value;
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
+
+/**
+ * 日付チップ用に月と日を別々に取り出す。
+ * 「7月29日」のような文字列から数字だけ抜いて切る手は、
+ * 「12月5日」→"125"→"25"、「10月9日」→"109"→"09" のように日を壊す。
+ */
+export function splitDate(value: string | null | undefined) {
+  if (!value) return { month: '—', day: '—' };
+  const d = new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return { month: '—', day: '—' };
+  return { month: `${d.getMonth() + 1}月`, day: String(d.getDate()) };
+}

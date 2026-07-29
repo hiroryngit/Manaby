@@ -80,6 +80,16 @@ export function PencilIcon({ color = '#000', size = 24 }: IconProps) {
   );
 }
 
+export function CalendarIcon({ color = '#000', size = 24 }: IconProps) {
+  return (
+    <Svg {...base(size)}>
+      <Path d="M4.5 6.5h15V20h-15z" {...stroke(color)} />
+      <Path d="M4.5 10.5h15" {...stroke(color)} />
+      <Path d="M8.5 4v4M15.5 4v4" {...stroke(color)} />
+    </Svg>
+  );
+}
+
 export function ChevronRightIcon({ color = '#000', size = 24 }: IconProps) {
   return (
     <Svg {...base(size)}>

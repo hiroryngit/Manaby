@@ -4,6 +4,7 @@ import { all, one, run, parseJson, newId } from './db.mjs';
 import { generateReport, generateHomework } from './ai.mjs';
 import { loadFreeModels, statusSnapshot } from './models.mjs';
 import { verifyIdToken, exchangeCode } from './google.mjs';
+import { activate, deactivate, requireAdmin } from './admin.mjs';
 
 const bad = (status, message) => Object.assign(new Error(message), { status });
 
@@ -246,16 +247,20 @@ export const routes = {
       [id, id, id, id],
     ),
 
-  // 記録未入力の授業（授業記録入力画面の入口）
-  'GET /tutors/:id/pending-lessons': async (_b, { id }) =>
-    all(
+  // 記録未入力の授業（授業記録入力画面の入口）。
+  // ?student_id= を付けると1人分に絞る（講師ホームの生徒カードから来る場合）
+  'GET /tutors/:id/pending-lessons': async (_b, { id }, query) => {
+    const studentId = query?.get('student_id');
+    return all(
       `select l.id, l.held_at, u.display_name as student_name, l.student_id
        from lessons l join users u on u.id = l.student_id
        left join lesson_records lr on lr.lesson_id = l.id
        where l.tutor_id = ? and lr.id is null
+         and (? is null or l.student_id = ?)
        order by l.held_at desc`,
-      [id],
-    ),
+      [id, studentId ?? null, studentId ?? null],
+    );
+  },
 
   // --- 授業記録入力 → AI 生成（F-08 / F-10） ---------------------------------
 
@@ -436,11 +441,11 @@ export const routes = {
   'POST /auth/session': async (b) => {
     const identity = await verifyIdToken(b?.id_token);
     const user = await one(
-      'select id, display_name, role from users where auth_uid = ?',
+      'select id, display_name, role, is_admin from users where auth_uid = ?',
       [identity.uid],
     );
     return user
-      ? { user }
+      ? { user: shapeUser(user) }
       : { needs_onboarding: true, profile: { email: identity.email, name: identity.displayName } };
   },
 
@@ -455,10 +460,10 @@ export const routes = {
     }
 
     const existing = await one(
-      'select id, display_name, role from users where auth_uid = ?',
+      'select id, display_name, role, is_admin from users where auth_uid = ?',
       [identity.uid],
     );
-    if (existing) return { user: existing, already_registered: true };
+    if (existing) return { user: shapeUser(existing), already_registered: true };
 
     // 同じメールで別の auth_uid が既にある場合は乗っ取りになるため拒否する
     const byEmail = await one('select id, auth_uid from users where email = ?', [identity.email]);
@@ -477,7 +482,115 @@ export const routes = {
       await run('insert into tutor_profiles (user_id, subjects) values (?, ?)', [id, '[]']);
     }
 
-    return { user: { id, display_name: identity.displayName, role: b.role } };
+    return { user: { id, display_name: identity.displayName, role: b.role, is_admin: false } };
+  },
+
+  // --- 管理者（F-12） --------------------------------------------------------
+  //
+  // 役割は変更できないので、管理者は「属性」として後から付ける。
+  // 合言葉を知っている人だけが自分で立ち上げられる。
+
+  'POST /auth/admin/activate': async (b) => activate(b ?? {}),
+  'POST /auth/admin/deactivate': async (_b, _p, _q, headers) => deactivate(headers),
+
+  // 全利用者。誰と誰が紐づいているかを一覧で見せる
+  'GET /admin/users': async (_b, _p, _q, headers) => {
+    await requireAdmin(headers);
+    return (
+      await all(
+        `select u.id, u.email, u.display_name, u.role, u.is_admin, u.created_at,
+                u.auth_uid is not null as google_linked,
+                sp.parent_id, sp.grade,
+                p.display_name as parent_name
+         from users u
+         left join student_profiles sp on sp.user_id = u.id
+         left join users p on p.id = sp.parent_id
+         order by u.role, u.display_name`,
+      )
+    ).map((u) => ({ ...u, is_admin: !!u.is_admin, google_linked: !!u.google_linked }));
+  },
+
+  // 生徒を保護者に紐づける。これを通さないと保護者の画面は空のままになる
+  'POST /admin/link-child': async (b, _p, _q, headers) => {
+    await requireAdmin(headers);
+    if (!b?.parent_id || !b?.student_id) throw bad(400, 'parent_id / student_id は必須です');
+
+    const parent = await one('select id, role from users where id = ?', [b.parent_id]);
+    if (parent?.role !== 'parent') throw bad(400, '保護者アカウントを指定してください');
+
+    const student = await one('select id, role from users where id = ?', [b.student_id]);
+    if (student?.role !== 'student') throw bad(400, '生徒アカウントを指定してください');
+
+    // Google 登録直後の生徒には profiles 行がある。無い場合に備えて両対応にする
+    const profile = await one('select user_id from student_profiles where user_id = ?', [
+      b.student_id,
+    ]);
+    if (profile) {
+      await run('update student_profiles set parent_id = ? where user_id = ?', [
+        b.parent_id,
+        b.student_id,
+      ]);
+    } else {
+      await run('insert into student_profiles (user_id, parent_id) values (?,?)', [
+        b.student_id,
+        b.parent_id,
+      ]);
+    }
+    return OK;
+  },
+
+  'POST /admin/unlink-child': async (b, _p, _q, headers) => {
+    await requireAdmin(headers);
+    if (!b?.student_id) throw bad(400, 'student_id は必須です');
+    await run('update student_profiles set parent_id = null where user_id = ?', [b.student_id]);
+    return OK;
+  },
+
+  // 予約リクエスト。承認する経路がここにしか無いため、管理者が捌く
+  'GET /admin/bookings': async (_b, _p, _q, headers) => {
+    await requireAdmin(headers);
+    return all(
+      `select b.id, b.starts_at, b.status, b.created_at,
+              s.display_name as student_name, s.id as student_id,
+              t.display_name as tutor_name, t.id as tutor_id,
+              l.id as lesson_id
+       from bookings b
+       join users s on s.id = b.student_id
+       join users t on t.id = b.tutor_id
+       left join lessons l on l.booking_id = b.id
+       order by (b.status = 'requested') desc, b.starts_at`,
+    );
+  },
+
+  // 承認すると授業（lessons）が立ち、講師の「記録未入力」に現れる
+  'POST /admin/bookings/:id/decide': async (b, { id }, _q, headers) => {
+    await requireAdmin(headers);
+    if (!['accepted', 'rejected'].includes(b?.decision)) {
+      throw bad(400, 'decision は accepted / rejected のいずれかです');
+    }
+
+    const booking = await one('select * from bookings where id = ?', [id]);
+    if (!booking) throw bad(404, '予約が見つかりません');
+    if (booking.status !== 'requested') throw bad(409, 'この予約は既に処理されています');
+
+    await run('update bookings set status = ? where id = ?', [b.decision, id]);
+
+    if (b.decision === 'accepted') {
+      // 承認と同時に授業を作る。ここを飛ばすと講師が記録を書く対象が生まれない
+      await run(
+        'insert into lessons (id, booking_id, student_id, tutor_id, held_at) values (?,?,?,?,?)',
+        [newId(), booking.id, booking.student_id, booking.tutor_id, booking.starts_at],
+      );
+    }
+
+    const parent = await one('select parent_id from student_profiles where user_id = ?', [
+      booking.student_id,
+    ]);
+    const title = b.decision === 'accepted' ? '予約が確定しました' : '予約が見送られました';
+    for (const uid of [booking.student_id, parent?.parent_id, booking.tutor_id].filter(Boolean)) {
+      await notify(uid, 'booking', title, null);
+    }
+    return OK;
   },
 
   // 保護者に紐づく生徒。保護者アカウントがどの生徒を見るかの解決に使う
@@ -494,6 +607,16 @@ export const routes = {
   'GET /users': async () =>
     all('select id, display_name, role from users order by role, display_name'),
 };
+
+/** SQLite の is_admin は 0/1 の整数。クライアントには真偽値で渡す */
+function shapeUser(row) {
+  return {
+    id: row.id,
+    display_name: row.display_name,
+    role: row.role,
+    is_admin: !!row.is_admin,
+  };
+}
 
 async function notify(userId, kind, title, body) {
   await run(

@@ -8,8 +8,9 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import type { Dashboard } from '../../src/api';
-import { useFetch, formatDateTime, formatDate } from '../../src/hooks';
+import { useFetch, formatDateTime, formatDate, splitDate } from '../../src/hooks';
 import { useSession, useViewingStudentId } from '../../src/session';
+import { AdminEntry } from '../../src/components/AdminEntry';
 import { ChevronRightIcon } from '../../src/components/icons';
 import {
   Badge, Button, Card, Empty, ErrorView, Loading, Row, ScreenHeader, SectionTitle, Stars,
@@ -93,12 +94,8 @@ export default function ParentHome() {
           {data.next_lesson ? (
             <Row style={{ gap: space.lg }}>
               <View style={s.dateChip}>
-                <Text style={s.dateChipDay}>
-                  {formatDate(data.next_lesson.starts_at).replace(/[^0-9]/g, '').slice(-2)}
-                </Text>
-                <Text style={s.dateChipMonth}>
-                  {formatDate(data.next_lesson.starts_at).split('月')[0]}月
-                </Text>
+                <Text style={s.dateChipDay}>{splitDate(data.next_lesson.starts_at).day}</Text>
+                <Text style={s.dateChipMonth}>{splitDate(data.next_lesson.starts_at).month}</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.itemTitle}>{formatDateTime(data.next_lesson.starts_at)}</Text>
@@ -150,7 +147,8 @@ export default function ParentHome() {
           )}
         </Card>
 
-        <View style={{ marginTop: space.huge }}>
+        <View style={{ marginTop: space.huge, gap: space.sm }}>
+          <AdminEntry />
           <Button title="ログアウト" variant="ghost" onPress={signOut} />
         </View>
       </ScrollView>

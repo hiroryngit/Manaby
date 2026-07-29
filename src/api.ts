@@ -11,12 +11,25 @@ export class ApiError extends Error {
   }
 }
 
+// 管理 API 用のトークン。合言葉を通ったときにサーバーが発行する（src/session.tsx が設定）。
+// 通常の画面では使わないため、既定では付けない。
+let adminToken: string | null = null;
+export const setAdminToken = (token: string | null) => {
+  adminToken = token;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(adminToken && (path.startsWith('/admin') || path.startsWith('/auth/admin'))
+          ? { Authorization: `Bearer ${adminToken}` }
+          : {}),
+        ...(init?.headers ?? {}),
+      },
     });
   } catch {
     // ネットワーク断は原因が利用者側にあることが多いので、その旨を伝える
@@ -39,7 +52,36 @@ export const api = {
 
 export type Role = 'parent' | 'student' | 'tutor' | 'admin';
 
-export type User = { id: string; display_name: string; role: Role };
+/**
+ * 役割は初回登録で固定され変更できない。
+ * 管理者はその役割に割り込まず、合言葉で立てる別の属性として持つ。
+ */
+export type User = { id: string; display_name: string; role: Role; is_admin?: boolean };
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  display_name: string;
+  role: Role;
+  is_admin: boolean;
+  google_linked: boolean;
+  created_at: string;
+  parent_id: string | null;
+  parent_name: string | null;
+  grade: string | null;
+};
+
+export type AdminBooking = {
+  id: string;
+  starts_at: string;
+  status: 'requested' | 'accepted' | 'rejected' | 'cancelled';
+  created_at: string;
+  student_name: string;
+  student_id: string;
+  tutor_name: string;
+  tutor_id: string;
+  lesson_id: string | null;
+};
 
 export type Tutor = {
   id: string;

@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import type { TutorStudent } from '../../src/api';
 import { useFetch, formatDate } from '../../src/hooks';
 import { useSession } from '../../src/session';
+import { AdminEntry } from '../../src/components/AdminEntry';
 import {
   Avatar, Badge, Button, Card, Empty, ErrorView, Loading, Row, ScreenHeader,
 } from '../../src/components/ui';
@@ -45,7 +46,8 @@ export default function TutorHome() {
       }
       ListEmptyComponent={<Empty message="担当生徒がいません" />}
       ListFooterComponent={
-        <View style={{ marginTop: space.huge }}>
+        <View style={{ marginTop: space.huge, gap: space.sm }}>
+          <AdminEntry />
           <Button title="ログアウト" variant="ghost" onPress={signOut} />
         </View>
       }
@@ -79,7 +81,13 @@ export default function TutorHome() {
                 <Button
                   title="授業記録を書く"
                   variant={pending ? 'mark' : 'ghost'}
-                  onPress={() => router.push('/(tutor)/lessons')}
+                  // 生徒カードの中のボタンなので、その生徒の授業だけを開く
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tutor)/lessons',
+                      params: { studentId: item.id, studentName: item.display_name },
+                    })
+                  }
                 />
               </View>
               <View style={{ flex: 1 }}>

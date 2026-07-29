@@ -19,6 +19,23 @@ const DIFFICULTIES = [
   { value: 3, label: '難' },
 ];
 
+// 保護者・生徒の画面はどれも「期限」を出す。ここで入れないと全て「—」になり、
+// ダッシュボードの並び（order by due_at）も意味を失う
+const DUE_OPTIONS = [
+  { days: 3, label: '3日後' },
+  { days: 7, label: '1週間後' },
+  { days: 14, label: '2週間後' },
+];
+
+/** 期限は日付だけあればよい。時刻を持たせると「今日中か翌朝か」で揉める */
+function dueDate(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')} 23:59:59`;
+}
+
 export default function HomeworkSetup() {
   const { studentId } = useLocalSearchParams<{ studentId: string }>();
   const router = useRouter();
@@ -28,6 +45,7 @@ export default function HomeworkSetup() {
   const [unit, setUnit] = useState('');
   const [count, setCount] = useState(5);
   const [difficulty, setDifficulty] = useState(2);
+  const [dueDays, setDueDays] = useState(7);
 
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [manualText, setManualText] = useState('');
@@ -84,6 +102,7 @@ export default function HomeworkSetup() {
         unit: unit.trim(),
         source: mode,
         difficulty,
+        due_at: dueDate(dueDays),
         questions: payload,
       });
       notify('宿題を設定しました。生徒に通知されます。');
@@ -115,6 +134,18 @@ export default function HomeworkSetup() {
 
       <SectionTitle>単元</SectionTitle>
       <Input value={unit} onChangeText={setUnit} placeholder="例: 割合" />
+
+      <SectionTitle>提出期限</SectionTitle>
+      <Row style={{ gap: space.xs }}>
+        {DUE_OPTIONS.map((d) => (
+          <Chip
+            key={d.days}
+            label={d.label}
+            active={dueDays === d.days}
+            onPress={() => setDueDays(d.days)}
+          />
+        ))}
+      </Row>
 
       {mode === 'ai' ? (
         <>

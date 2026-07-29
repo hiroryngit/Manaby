@@ -25,11 +25,17 @@ function Guard() {
       if (!PUBLIC_GROUPS.includes(group)) router.replace('/login');
       return;
     }
-    // 講師と保護者/生徒で入口が違う
-    const home = user.role === 'tutor' ? '/(tutor)' : '/(parent)';
+
+    // 講師と保護者/生徒で入口が違う。
+    // 管理者は「役割」ではなく属性なので、role が admin のアカウントだけを
+    // 管理画面に着地させる。保護者や講師が兼任している場合は普段の画面のままにする。
+    const home = user.role === 'admin' ? '/(admin)' : user.role === 'tutor' ? '/(tutor)' : '/(parent)';
     if (group === 'login' || group === 'onboarding' || group === undefined) {
       router.replace(home);
+      return;
     }
+    // 権限を失った状態で管理画面に残らせない
+    if (group === '(admin)' && !user.is_admin) router.replace(home);
   }, [user, ready, segments, router]);
 
   if (!ready) return <Loading label="起動中…" />;
@@ -47,8 +53,10 @@ function Guard() {
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="admin-unlock" options={{ title: '管理者認証' }} />
       <Stack.Screen name="(parent)" options={{ headerShown: false }} />
       <Stack.Screen name="(tutor)" options={{ headerShown: false }} />
+      <Stack.Screen name="(admin)" options={{ headerShown: false }} />
     </Stack>
   );
 }

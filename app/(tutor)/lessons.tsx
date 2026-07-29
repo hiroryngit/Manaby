@@ -1,7 +1,7 @@
 // 記録未入力の授業一覧（⑧ 授業記録入力への入口）
 
 import { FlatList, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { PendingLesson } from '../../src/api';
 import { useFetch, formatDateTime } from '../../src/hooks';
 import { useSession } from '../../src/session';
@@ -11,8 +11,16 @@ import { colors, font, space } from '../../src/theme';
 export default function PendingLessons() {
   const router = useRouter();
   const { user } = useSession();
+  // 講師ホームの生徒カードから来た場合はその生徒だけに絞る
+  const { studentId, studentName } = useLocalSearchParams<{
+    studentId?: string;
+    studentName?: string;
+  }>();
+
   const { data, error, loading, reload } = useFetch<PendingLesson[]>(
-    user ? `/tutors/${user.id}/pending-lessons` : null,
+    user
+      ? `/tutors/${user.id}/pending-lessons${studentId ? `?student_id=${studentId}` : ''}`
+      : null,
   );
 
   if (error) return <ErrorView message={error} onRetry={reload} />;
@@ -27,11 +35,29 @@ export default function PendingLessons() {
       onRefresh={reload}
       ListHeaderComponent={
         <Text style={s.lead}>
+          {studentName ? `${studentName} さんの未入力分です。` : ''}
           入力は3〜5分で終わります。書き終えるとAIがレポート・生徒へのコメント・
           指導方針を下書きします。
         </Text>
       }
-      ListEmptyComponent={<Empty message="記録が未入力の授業はありません" />}
+      ListEmptyComponent={
+        <Empty
+          message={
+            studentName
+              ? `${studentName} さんの記録はすべて入力済みです`
+              : '記録が未入力の授業はありません'
+          }
+          action={
+            studentName ? (
+              <Button
+                title="すべての授業を見る"
+                variant="secondary"
+                onPress={() => router.replace('/(tutor)/lessons')}
+              />
+            ) : undefined
+          }
+        />
+      }
       renderItem={({ item }) => (
         <Card mark>
           <Row style={{ justifyContent: 'space-between', gap: space.md }}>

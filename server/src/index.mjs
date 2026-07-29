@@ -62,7 +62,8 @@ const server = createServer(async (req, res) => {
       const raw = Buffer.concat(chunks).toString();
       body = raw ? JSON.parse(raw) : undefined;
     }
-    const result = await route.handler(body, route.params, url.searchParams);
+    // 管理 API は Authorization ヘッダーで認証するため、ヘッダーもハンドラに渡す
+    const result = await route.handler(body, route.params, url.searchParams, req.headers);
     if (req.method === 'HEAD') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end();
