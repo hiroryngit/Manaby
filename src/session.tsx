@@ -14,15 +14,10 @@ type SessionValue = {
   ready: boolean;
   signIn: (user: User) => Promise<void>;
   signOut: () => Promise<void>;
-  /** Google の identity から既存アカウントを引く。未登録なら null */
-  resolveAccount: (authUid: string) => Promise<User | null>;
+  /** ID トークンで既存アカウントを引く。未登録なら null */
+  resolveAccount: (idToken: string) => Promise<User | null>;
   /** 初回登録。ここで決めた役割は以後変更できない */
-  register: (input: {
-    authUid: string;
-    email: string;
-    displayName: string;
-    role: Exclude<Role, 'admin'>;
-  }) => Promise<User>;
+  register: (input: { idToken: string; role: Exclude<Role, 'admin'> }) => Promise<User>;
 };
 
 const SessionContext = createContext<SessionValue>(null as unknown as SessionValue);
@@ -49,20 +44,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(STORAGE_KEY);
   };
 
-  const resolveAccount = async (authUid: string) => {
+  const resolveAccount = async (idToken: string) => {
     const res = await api.post<{ user?: User; needs_onboarding?: boolean }>('/auth/session', {
-      auth_uid: authUid,
+      id_token: idToken,
     });
     return res.user ?? null;
   };
 
-  const register: SessionValue['register'] = async ({ authUid, email, displayName, role }) => {
-    const res = await api.post<{ user: User }>('/auth/register', {
-      auth_uid: authUid,
-      email,
-      display_name: displayName,
-      role,
-    });
+  const register: SessionValue['register'] = async ({ idToken, role }) => {
+    // 氏名とメールはサーバーが ID トークンから取り出す。ここでは送らない
+    const res = await api.post<{ user: User }>('/auth/register', { id_token: idToken, role });
     await signIn(res.user);
     return res.user;
   };

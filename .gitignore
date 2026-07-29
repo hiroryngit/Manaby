@@ -52,3 +52,6 @@ dist/
 .vercel/
 .vercel
 .env*
+
+# Google OAuth クライアント情報（client_secret を含む）
+client_secret_*.json

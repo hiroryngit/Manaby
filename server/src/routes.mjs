@@ -3,6 +3,7 @@
 import { all, one, run, parseJson, newId } from './db.mjs';
 import { generateReport, generateHomework } from './ai.mjs';
 import { loadFreeModels, statusSnapshot } from './models.mjs';
+import { verifyIdToken } from './google.mjs';
 
 const bad = (status, message) => Object.assign(new Error(message), { status });
 
@@ -418,23 +419,27 @@ export const routes = {
   },
 
   // --- 認証（F-01） ----------------------------------------------------------
+  //
+  // 身元は必ず Google の ID トークンから取り出す。
+  // クライアントが送ってきた uid / email / 氏名は信用しない。
 
   // Google ログイン後に呼ぶ。登録済みならその利用者を、未登録なら初回登録が必要な旨を返す
   'POST /auth/session': async (b) => {
-    if (!b?.auth_uid) throw bad(400, 'auth_uid は必須です');
+    const identity = await verifyIdToken(b?.id_token);
     const user = await one(
       'select id, display_name, role from users where auth_uid = ?',
-      [b.auth_uid],
+      [identity.uid],
     );
-    return user ? { user } : { needs_onboarding: true };
+    return user
+      ? { user }
+      : { needs_onboarding: true, profile: { email: identity.email, name: identity.displayName } };
   },
 
   // 初回登録。役割はここでのみ決まり、以後変更できない。
   // 登録済みの auth_uid で再度呼ばれても、保存済みの役割をそのまま返す。
   'POST /auth/register': async (b) => {
-    for (const f of ['auth_uid', 'email', 'display_name', 'role']) {
-      if (!b?.[f]) throw bad(400, `${f} は必須です`);
-    }
+    const identity = await verifyIdToken(b?.id_token);
+    if (!b?.role) throw bad(400, 'role は必須です');
     // admin は自己登録させない
     if (!['parent', 'student', 'tutor'].includes(b.role)) {
       throw bad(400, '役割は 保護者 / 生徒 / 講師 のいずれかです');
@@ -442,18 +447,18 @@ export const routes = {
 
     const existing = await one(
       'select id, display_name, role from users where auth_uid = ?',
-      [b.auth_uid],
+      [identity.uid],
     );
     if (existing) return { user: existing, already_registered: true };
 
     // 同じメールで別の auth_uid が既にある場合は乗っ取りになるため拒否する
-    const byEmail = await one('select id, auth_uid from users where email = ?', [b.email]);
+    const byEmail = await one('select id, auth_uid from users where email = ?', [identity.email]);
     if (byEmail) throw bad(409, 'このメールアドレスは既に登録されています');
 
     const id = newId();
     await run(
       'insert into users (id, email, display_name, role, auth_uid) values (?,?,?,?,?)',
-      [id, b.email, b.display_name, b.role, b.auth_uid],
+      [id, identity.email, identity.displayName, b.role, identity.uid],
     );
 
     // 役割ごとのプロフィール行を作る
@@ -463,7 +468,7 @@ export const routes = {
       await run('insert into tutor_profiles (user_id, subjects) values (?, ?)', [id, '[]']);
     }
 
-    return { user: { id, display_name: b.display_name, role: b.role } };
+    return { user: { id, display_name: identity.displayName, role: b.role } };
   },
 
   // 保護者に紐づく生徒。保護者アカウントがどの生徒を見るかの解決に使う

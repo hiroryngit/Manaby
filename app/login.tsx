@@ -26,17 +26,14 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      const identity = await signInWithGoogle();
-      const existing = await resolveAccount(identity.uid);
+      const idToken = await signInWithGoogle();
+      const existing = await resolveAccount(idToken);
       if (existing) {
         // 2回目以降。役割は登録時のものが使われ、選び直しは発生しない
         await signIn(existing);
         router.replace(existing.role === 'tutor' ? '/(tutor)' : '/(parent)');
       } else {
-        router.replace({
-          pathname: '/onboarding',
-          params: { uid: identity.uid, email: identity.email, name: identity.displayName },
-        });
+        router.replace({ pathname: '/onboarding', params: { idToken } });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ログインに失敗しました');

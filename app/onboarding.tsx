@@ -35,7 +35,7 @@ const ROLES: { value: SelectableRole; label: string; description: string }[] = [
 export default function Onboarding() {
   const router = useRouter();
   const { register } = useSession();
-  const params = useLocalSearchParams<{ uid: string; email: string; name: string }>();
+  const params = useLocalSearchParams<{ idToken: string }>();
 
   const [role, setRole] = useState<SelectableRole | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -43,16 +43,11 @@ export default function Onboarding() {
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    if (!role || !params.uid) return;
+    if (!role || !params.idToken) return;
     setSaving(true);
     setError(null);
     try {
-      const user = await register({
-        authUid: params.uid,
-        email: params.email ?? '',
-        displayName: params.name ?? '名称未設定',
-        role,
-      });
+      const user = await register({ idToken: params.idToken, role });
       router.replace(user.role === 'tutor' ? '/(tutor)' : '/(parent)');
     } catch (e) {
       setError(e instanceof Error ? e.message : '登録に失敗しました');
@@ -68,8 +63,7 @@ export default function Onboarding() {
       <ScrollView contentContainerStyle={s.wrap}>
         <Text style={s.title}>ご利用の立場を選んでください</Text>
         <Text style={s.lead}>
-          {params.name ? `${params.name} さん、ようこそ。` : 'ようこそ。'}
-          この選択は登録後に変更できません。
+          ようこそ。この選択は登録後に変更できません。
         </Text>
 
         {ROLES.map((r) => {

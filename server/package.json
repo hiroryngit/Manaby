@@ -12,6 +12,7 @@
     "dev": "node --watch src/index.mjs"
   },
   "dependencies": {
-    "@libsql/client": "^0.15.7"
+    "@libsql/client": "^0.15.7",
+    "google-auth-library": "^10.9.1"
   }
 }
