@@ -1,5 +1,8 @@
 // ⑥ 学習カルテ（F-06）
 // 受け入れ基準: 推移が1画面で俯瞰でき、苦手単元が視覚的に識別できること
+//
+// 理解度は「線の濃さ＋長さ＋数値」で示し、色だけに判別を負わせない。
+// 2以下の単元にだけ朱を立てる。
 
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -7,8 +10,11 @@ import type { LearningRecord } from '../../src/api';
 import { useFetch, formatDate } from '../../src/hooks';
 import { useViewingStudentId } from '../../src/session';
 import { RadarChart } from '../../src/components/RadarChart';
-import { Badge, Card, Empty, ErrorView, Loading, Row, SectionTitle, Stars } from '../../src/components/ui';
-import { colors, font, levelColor, radius, space } from '../../src/theme';
+import { ChevronRightIcon } from '../../src/components/icons';
+import {
+  Badge, Card, Empty, ErrorView, LevelBar, Loading, Row, SectionTitle, Stars,
+} from '../../src/components/ui';
+import { colors, font, levelColor, needsAttention, space } from '../../src/theme';
 
 export default function RecordScreen() {
   const router = useRouter();
@@ -22,7 +28,7 @@ export default function RecordScreen() {
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
 
-  const weak = data.units.filter((u) => u.level <= 2);
+  const weak = data.units.filter((u) => needsAttention(u.level));
 
   return (
     <ScrollView contentContainerStyle={s.wrap}>
@@ -34,13 +40,11 @@ export default function RecordScreen() {
       {weak.length > 0 && (
         <>
           <SectionTitle>重点的に取り組みたい単元</SectionTitle>
-          <Card style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA' }}>
-            <Row style={{ gap: space.xs, flexWrap: 'wrap' }}>
-              {weak.map((u) => (
-                <Badge key={u.unit} label={`${u.unit}（${u.level}/5）`} tone="danger" />
-              ))}
-            </Row>
-          </Card>
+          <Row style={{ gap: space.sm, flexWrap: 'wrap' }}>
+            {weak.map((u) => (
+              <Badge key={u.unit} label={`${u.unit} ${u.level}／5`} tone="shu" />
+            ))}
+          </Row>
         </>
       )}
 
@@ -52,16 +56,8 @@ export default function RecordScreen() {
           data.units.map((u, i) => (
             <View key={u.unit} style={[s.unitRow, i > 0 && s.divider]}>
               <Text style={s.unitName}>{u.unit}</Text>
-              <Row style={{ gap: space.sm }}>
-                {/* 数値をバーで示す。色でも識別できるようにする */}
-                <View style={s.barTrack}>
-                  <View
-                    style={[
-                      s.barFill,
-                      { width: `${(u.level / 5) * 100}%`, backgroundColor: levelColor(u.level) },
-                    ]}
-                  />
-                </View>
+              <Row style={{ gap: space.md, marginTop: space.sm }}>
+                <LevelBar level={u.level} />
                 <Text style={[s.level, { color: levelColor(u.level) }]}>{u.level}</Text>
               </Row>
             </View>
@@ -75,45 +71,39 @@ export default function RecordScreen() {
           <Empty message="授業の記録がまだありません" />
         </Card>
       ) : (
-        data.lessons.map((l, i) => (
-          <Card
-            key={i}
-            onPress={l.report_id ? () => router.push(`/(parent)/report/${l.report_id}`) : undefined}
-          >
-            <Row style={{ justifyContent: 'space-between' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.lessonTitle}>
-                  {l.subject} / {l.unit}
-                </Text>
-                <Text style={s.lessonDate}>{formatDate(l.held_at)}</Text>
-              </View>
-              <Row style={{ gap: space.sm }}>
-                <Stars value={l.understanding_level} size={14} />
-                {l.report_id && <Text style={s.chevron}>›</Text>}
+        <View style={{ gap: space.sm }}>
+          {data.lessons.map((l, i) => (
+            <Card
+              key={i}
+              mark={!!l.report_id}
+              onPress={l.report_id ? () => router.push(`/(parent)/report/${l.report_id}`) : undefined}
+            >
+              <Row style={{ justifyContent: 'space-between', gap: space.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lessonTitle}>
+                    {l.subject}／{l.unit}
+                  </Text>
+                  <Text style={s.lessonDate}>{formatDate(l.held_at)}</Text>
+                </View>
+                <Row style={{ gap: space.sm }}>
+                  <Stars value={l.understanding_level} size={13} />
+                  {l.report_id && <ChevronRightIcon color={colors.sumiFaint} size={18} />}
+                </Row>
               </Row>
-            </Row>
-          </Card>
-        ))
+            </Card>
+          ))}
+        </View>
       )}
     </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, gap: space.sm, paddingBottom: space.xxl },
-  unitRow: { paddingVertical: space.md, gap: space.sm },
-  divider: { borderTopWidth: 1, borderTopColor: colors.border },
-  unitName: { ...font.body, color: colors.ink },
-  barTrack: {
-    flex: 1,
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: radius.pill },
-  level: { ...font.h3, minWidth: 18, textAlign: 'right' },
-  lessonTitle: { ...font.h3, color: colors.ink },
-  lessonDate: { ...font.small, color: colors.muted, marginTop: 2 },
-  chevron: { ...font.h2, color: colors.faint },
+  wrap: { padding: space.lg, paddingBottom: space.huge },
+  unitRow: { paddingVertical: space.md },
+  divider: { borderTopWidth: 1, borderTopColor: colors.rule },
+  unitName: { ...font.body, color: colors.sumi },
+  level: { ...font.num, minWidth: 16, textAlign: 'right' },
+  lessonTitle: { ...font.h3, color: colors.sumi },
+  lessonDate: { ...font.num, color: colors.sumiFaint, marginTop: space.xs },
 });

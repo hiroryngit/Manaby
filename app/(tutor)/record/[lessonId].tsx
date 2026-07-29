@@ -2,6 +2,9 @@
 //
 // MVP の生命線。入力完了までの中央値 5 分以内が受け入れ基準なので、
 // 自由入力は最小限にし、選択・タップで済む項目を優先する。
+//
+// 見た目は記入用紙に寄せる。1行の入力は箱ではなく罫、見出しは見出し罫。
+// 講師は書き込む側なので、確定操作は朱にする。
 
 import { useState } from 'react';
 import {
@@ -10,13 +13,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../../src/api';
-import { Badge, Button, Card, Row, SectionTitle, Stars } from '../../../src/components/ui';
-import { colors, font, radius, space } from '../../../src/theme';
+import { Button, Chip, Input, Row, SectionTitle, Stars } from '../../../src/components/ui';
+import { colors, font, levelColor, space } from '../../../src/theme';
 
 const SUBJECTS = ['算数', '数学', '国語', '英語', '理科', '社会'];
 
@@ -30,6 +32,26 @@ const WEAK_SUGGESTIONS = [
   '文法',
   '読解',
 ];
+
+function LevelField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <>
+      <SectionTitle>{label}</SectionTitle>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Stars value={value} size={30} onChange={onChange} />
+        <Text style={[s.levelText, { color: levelColor(value) }]}>{value}／5</Text>
+      </Row>
+    </>
+  );
+}
 
 export default function LessonRecordInput() {
   const { lessonId } = useLocalSearchParams<{ lessonId: string }>();
@@ -88,68 +110,53 @@ export default function LessonRecordInput() {
         </Row>
 
         <SectionTitle>単元</SectionTitle>
-        <TextInput
-          style={s.input}
-          value={unit}
-          onChangeText={setUnit}
-          placeholder="例: 割合"
-          placeholderTextColor={colors.faint}
-        />
+        <Input value={unit} onChangeText={setUnit} placeholder="例: 割合" />
 
         <SectionTitle>今日の学習内容</SectionTitle>
-        <TextInput
-          style={[s.input, s.multiline]}
+        <Input
           value={content}
           onChangeText={setContent}
           placeholder="例: 百分率と歩合の変換、割合の3用法"
-          placeholderTextColor={colors.faint}
           multiline
         />
 
-        <SectionTitle>理解度</SectionTitle>
-        <Card>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <Stars value={understanding} size={32} onChange={setUnderstanding} />
-            <Text style={s.levelText}>{understanding} / 5</Text>
-          </Row>
-        </Card>
+        <LevelField label="理解度" value={understanding} onChange={setUnderstanding} />
+        <LevelField label="集中度" value={concentration} onChange={setConcentration} />
 
-        <SectionTitle>集中度</SectionTitle>
-        <Card>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <Stars value={concentration} size={32} onChange={setConcentration} />
-            <Text style={s.levelText}>{concentration} / 5</Text>
-          </Row>
-        </Card>
-
-        <SectionTitle>苦手単元（任意・複数選択可）</SectionTitle>
+        <SectionTitle>つまずいた点（任意・複数選択可）</SectionTitle>
         <Row style={{ gap: space.xs, flexWrap: 'wrap' }}>
           {WEAK_SUGGESTIONS.map((w) => (
-            <Chip key={w} label={w} active={weakUnits.includes(w)} onPress={() => toggleWeak(w)} tone="danger" />
+            <Chip
+              key={w}
+              label={w}
+              active={weakUnits.includes(w)}
+              onPress={() => toggleWeak(w)}
+              tone="shu"
+            />
           ))}
         </Row>
 
         <SectionTitle>コメント（任意）</SectionTitle>
-        <TextInput
-          style={[s.input, s.multiline]}
+        <Input
           value={comment}
           onChangeText={setComment}
           placeholder="例: 公式は覚えているが文章題で立式に迷う"
-          placeholderTextColor={colors.faint}
           multiline
         />
 
         {error && <Text style={s.error}>{error}</Text>}
 
-        <View style={{ marginTop: space.lg }}>
+        <View style={{ marginTop: space.xl }}>
           <Button
-            title={saving ? 'AIが生成中…' : '送信してAIレポートを作成'}
+            title={saving ? 'AIが下書きしています…' : '送信してAIに下書きさせる'}
             onPress={submit}
             loading={saving}
+            variant="mark"
+            size="lg"
           />
           <Text style={s.hint}>
-            送信すると保護者向けレポート・生徒向けコメント・指導方針が自動生成されます。
-            内容は次の画面で確認・修正できます。
+            送信すると保護者向けレポート・生徒へのコメント・指導方針が下書きされます。
+            次の画面で確認・修正してから確定できます。
           </Text>
         </View>
       </ScrollView>
@@ -157,56 +164,9 @@ export default function LessonRecordInput() {
   );
 }
 
-function Chip({
-  label,
-  active,
-  onPress,
-  tone = 'brand',
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  tone?: 'brand' | 'danger';
-}) {
-  const activeBg = tone === 'danger' ? '#FEE2E2' : colors.brandSoft;
-  const activeFg = tone === 'danger' ? '#991B1B' : colors.brandInk;
-  return (
-    <Text
-      onPress={onPress}
-      style={[
-        s.chip,
-        active
-          ? { backgroundColor: activeBg, color: activeFg, borderColor: activeBg }
-          : { backgroundColor: colors.surface, color: colors.muted, borderColor: colors.border },
-      ]}
-    >
-      {label}
-    </Text>
-  );
-}
-
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, paddingBottom: space.xxl },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: space.md,
-    minHeight: 48,
-    ...font.body,
-    color: colors.ink,
-  },
-  multiline: { minHeight: 88, textAlignVertical: 'top' },
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    overflow: 'hidden',
-    ...font.small,
-  },
-  levelText: { ...font.h2, color: colors.ink },
-  error: { ...font.small, color: colors.danger, marginTop: space.md },
-  hint: { ...font.caption, color: colors.muted, marginTop: space.sm, lineHeight: 16, textAlign: 'center' },
+  wrap: { padding: space.lg, paddingBottom: space.huge },
+  levelText: font.numLg,
+  error: { ...font.small, color: colors.shu, marginTop: space.lg },
+  hint: { ...font.small, color: colors.sumiFaint, marginTop: space.md },
 });

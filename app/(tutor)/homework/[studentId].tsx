@@ -1,12 +1,14 @@
 // ⑨ 宿題設定画面（F-09）
-// AI生成 と 手入力 をタブで切り替える。AI の結果は確定前に必ず確認できる。
+// AI生成 と 手入力 を切り替える。AI の結果は確定前に必ず確認できる。
 
 import { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api, type Question } from '../../../src/api';
-import { Badge, Button, Card, Row, SectionTitle } from '../../../src/components/ui';
-import { colors, font, radius, space } from '../../../src/theme';
+import {
+  Button, Card, Chip, Input, Row, SectionTitle, Segmented,
+} from '../../../src/components/ui';
+import { colors, font, space } from '../../../src/theme';
 
 const SUBJECTS = ['算数', '数学', '国語', '英語', '理科', '社会'];
 const COUNTS = [3, 5, 10];
@@ -38,6 +40,8 @@ export default function HomeworkSetup() {
   const [error, setError] = useState<string | null>(null);
   const [usedModel, setUsedModel] = useState<string | null>(null);
 
+  const manualCount = manualText.split('\n').filter((t) => t.trim()).length;
+
   const generate = async () => {
     if (!unit.trim()) {
       setError('単元を入力してください');
@@ -51,7 +55,7 @@ export default function HomeworkSetup() {
         { subject, unit: unit.trim(), question_count: count, difficulty },
       );
       if (!res.questions.length) {
-        setError('AIが問題を生成できませんでした。手入力に切り替えるか、再度お試しください。');
+        setError('AIが問題を作れませんでした。手入力に切り替えるか、もう一度お試しください。');
       }
       setQuestions(res.questions);
       setUsedModel(res.model);
@@ -97,16 +101,14 @@ export default function HomeworkSetup() {
 
   return (
     <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
-      {/* モード切替 */}
-      <Row style={s.tabs}>
-        {(['ai', 'manual'] as const).map((m) => (
-          <Pressable key={m} onPress={() => setMode(m)} style={[s.tab, mode === m && s.tabActive]}>
-            <Text style={[s.tabText, mode === m && s.tabTextActive]}>
-              {m === 'ai' ? 'AI生成' : '手入力'}
-            </Text>
-          </Pressable>
-        ))}
-      </Row>
+      <Segmented
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: 'ai', label: 'AIに作らせる' },
+          { value: 'manual', label: '自分で書く' },
+        ]}
+      />
 
       <SectionTitle>教科</SectionTitle>
       <Row style={{ gap: space.xs, flexWrap: 'wrap' }}>
@@ -116,13 +118,7 @@ export default function HomeworkSetup() {
       </Row>
 
       <SectionTitle>単元</SectionTitle>
-      <TextInput
-        style={s.input}
-        value={unit}
-        onChangeText={setUnit}
-        placeholder="例: 割合"
-        placeholderTextColor={colors.faint}
-      />
+      <Input value={unit} onChangeText={setUnit} placeholder="例: 割合" />
 
       {mode === 'ai' ? (
         <>
@@ -145,9 +141,9 @@ export default function HomeworkSetup() {
             ))}
           </Row>
 
-          <View style={{ marginTop: space.lg }}>
+          <View style={{ marginTop: space.xl }}>
             <Button
-              title={generating ? 'AIが生成中…' : 'AIで生成する'}
+              title={generating ? 'AIが作っています…' : 'AIで作る'}
               onPress={generate}
               loading={generating}
               variant="secondary"
@@ -156,104 +152,58 @@ export default function HomeworkSetup() {
 
           {questions && (
             <>
-              <SectionTitle>生成結果（確認してから確定してください）</SectionTitle>
-              {questions.map((q, i) => (
-                <Card key={i} style={{ marginBottom: space.sm }}>
-                  <Row style={{ gap: space.sm }}>
-                    <Text style={s.qNum}>問{i + 1}</Text>
-                    <Text style={s.qText}>{q.text}</Text>
-                  </Row>
-                  {q.answer && <Text style={s.answer}>解答: {q.answer}</Text>}
-                </Card>
-              ))}
-              {usedModel && <Text style={s.model}>生成モデル: {usedModel}</Text>}
+              <SectionTitle>下書き（確認してから確定してください）</SectionTitle>
+              <View style={{ gap: space.sm }}>
+                {questions.map((q, i) => (
+                  <Card key={i}>
+                    <Row style={{ gap: space.md, alignItems: 'flex-start' }}>
+                      <Text style={s.qNum}>問{i + 1}</Text>
+                      <Text style={s.qText}>{q.text}</Text>
+                    </Row>
+                    {q.answer && <Text style={s.answer}>解答 {q.answer}</Text>}
+                  </Card>
+                ))}
+              </View>
+              {usedModel && <Text style={s.model}>生成モデル {usedModel}</Text>}
             </>
           )}
         </>
       ) : (
         <>
           <SectionTitle>問題（1行に1問）</SectionTitle>
-          <TextInput
-            style={[s.input, { minHeight: 200 }]}
+          <Input
             value={manualText}
             onChangeText={setManualText}
             multiline
+            minHeight={200}
             placeholder={'2/3 × 3/4 を計算しなさい。\n5/6 × 2/5 を計算しなさい。'}
-            placeholderTextColor={colors.faint}
           />
-          <Row style={{ marginTop: space.sm }}>
-            <Badge
-              label={`${manualText.split('\n').filter((t) => t.trim()).length}問`}
-              tone="brand"
-            />
-          </Row>
+          <Text style={s.count}>{manualCount}問</Text>
         </>
       )}
 
       {error && <Text style={s.error}>{error}</Text>}
 
-      <View style={{ marginTop: space.lg }}>
+      <View style={{ marginTop: space.xl }}>
         <Button
           title={mode === 'ai' ? 'この内容で確定する' : '宿題を設定する'}
           onPress={save}
           loading={saving}
           disabled={mode === 'ai' && !questions?.length}
+          variant="mark"
+          size="lg"
         />
       </View>
     </ScrollView>
   );
 }
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Text
-      onPress={onPress}
-      style={[
-        s.chip,
-        active
-          ? { backgroundColor: colors.brandSoft, color: colors.brandInk, borderColor: colors.brandSoft }
-          : { backgroundColor: colors.surface, color: colors.muted, borderColor: colors.border },
-      ]}
-    >
-      {label}
-    </Text>
-  );
-}
-
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, paddingBottom: space.xxl },
-  tabs: {
-    backgroundColor: colors.border,
-    borderRadius: radius.md,
-    padding: 3,
-    gap: 3,
-  },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: radius.sm, alignItems: 'center' },
-  tabActive: { backgroundColor: colors.surface },
-  tabText: { ...font.h3, color: colors.muted },
-  tabTextActive: { color: colors.brand },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: space.md,
-    minHeight: 48,
-    ...font.body,
-    color: colors.ink,
-    textAlignVertical: 'top',
-  },
-  chip: {
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    overflow: 'hidden',
-    ...font.small,
-  },
-  qNum: { ...font.small, color: colors.brand, fontWeight: '700', minWidth: 32 },
-  qText: { ...font.body, color: colors.ink, flex: 1, lineHeight: 22 },
-  answer: { ...font.small, color: colors.muted, marginTop: space.sm, marginLeft: 40 },
-  model: { ...font.caption, color: colors.faint, textAlign: 'center' },
-  error: { ...font.small, color: colors.danger, marginTop: space.md },
+  wrap: { padding: space.lg, paddingBottom: space.huge },
+  qNum: { ...font.num, color: colors.ao, minWidth: 30 },
+  qText: { ...font.body, color: colors.sumi, flex: 1 },
+  answer: { ...font.small, color: colors.sumiFaint, marginTop: space.sm, marginLeft: 42 },
+  count: { ...font.num, color: colors.sumiFaint, marginTop: space.sm, textAlign: 'right' },
+  model: { ...font.num, color: colors.sumiFaint, textAlign: 'center', marginTop: space.md },
+  error: { ...font.small, color: colors.shu, marginTop: space.lg },
 });

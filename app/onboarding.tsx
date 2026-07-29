@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { Role } from '../src/api';
 import { useSession } from '../src/session';
-import { Button, Card, Row } from '../src/components/ui';
+import { Button, Card, Row, ScreenHeader } from '../src/components/ui';
 import { colors, font, radius, space } from '../src/theme';
 
 type SelectableRole = Exclude<Role, 'admin'>;
@@ -28,7 +28,7 @@ const ROLES: { value: SelectableRole; label: string; description: string }[] = [
   {
     value: 'tutor',
     label: '講師',
-    description: '授業記録の入力と、宿題の設定を行います',
+    description: '授業記録を書き、宿題を設定します',
   },
 ];
 
@@ -59,51 +59,53 @@ export default function Onboarding() {
   const selected = ROLES.find((r) => r.value === role);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
       <ScrollView contentContainerStyle={s.wrap}>
-        <Text style={s.title}>ご利用の立場を選んでください</Text>
-        <Text style={s.lead}>
-          ようこそ。この選択は登録後に変更できません。
-        </Text>
+        <ScreenHeader
+          title="ご利用の立場を選んでください"
+          subtitle="この選択は登録後に変更できません。"
+        />
 
-        {ROLES.map((r) => {
-          const active = role === r.value;
-          return (
-            <Card
-              key={r.value}
-              style={[s.option, active && s.optionActive]}
-              onPress={() => {
-                setRole(r.value);
-                setConfirming(false);
-              }}
-            >
-              <Row style={{ gap: space.md }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.optionLabel, active && { color: colors.brandInk }]}>{r.label}</Text>
-                  <Text style={s.optionDesc}>{r.description}</Text>
-                </View>
-                <View style={[s.radio, active && s.radioActive]} />
-              </Row>
-            </Card>
-          );
-        })}
+        <View style={{ gap: space.sm, marginTop: space.md }}>
+          {ROLES.map((r) => {
+            const active = role === r.value;
+            return (
+              <Card
+                key={r.value}
+                style={active ? s.optionActive : undefined}
+                onPress={() => {
+                  setRole(r.value);
+                  setConfirming(false);
+                }}
+              >
+                <Row style={{ gap: space.md }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.optionLabel}>{r.label}</Text>
+                    <Text style={s.optionDesc}>{r.description}</Text>
+                  </View>
+                  <View style={[s.pick, active && s.pickOn]}>
+                    {active && <View style={s.pickDot} />}
+                  </View>
+                </Row>
+              </Card>
+            );
+          })}
+        </View>
 
         {error && <Text style={s.error}>{error}</Text>}
 
         {/* 変更できない選択なので、確定前にもう一段の確認を入れる */}
         {confirming && selected ? (
-          <Card style={s.confirm}>
+          <Card style={{ marginTop: space.xl }}>
+            <Text style={s.confirmLabel}>あとから変更できません</Text>
             <Text style={s.confirmTitle}>「{selected.label}」で登録します</Text>
-            <Text style={s.confirmBody}>
-              あとから変更することはできません。この立場でよろしいですか？
-            </Text>
-            <View style={{ gap: space.sm, marginTop: space.md }}>
+            <View style={{ gap: space.sm, marginTop: space.lg }}>
               <Button title="この立場で登録する" onPress={submit} loading={saving} />
               <Button title="選び直す" variant="ghost" onPress={() => setConfirming(false)} />
             </View>
           </Card>
         ) : (
-          <View style={{ marginTop: space.lg }}>
+          <View style={{ marginTop: space.xl }}>
             <Button title="次へ" onPress={() => setConfirming(true)} disabled={!role} />
           </View>
         )}
@@ -113,23 +115,25 @@ export default function Onboarding() {
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
-  title: { ...font.h1, color: colors.ink, marginTop: space.lg },
-  lead: { ...font.small, color: colors.muted, lineHeight: 20, marginBottom: space.md },
-  option: {},
-  optionActive: { borderColor: colors.brand, backgroundColor: colors.brandSoft },
-  optionLabel: { ...font.h3, color: colors.ink },
-  optionDesc: { ...font.small, color: colors.muted, marginTop: 2, lineHeight: 18 },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: colors.border,
+  wrap: { padding: space.lg, paddingTop: space.xl, paddingBottom: space.huge },
+  optionActive: { borderWidth: 1, borderColor: colors.sumi },
+  optionLabel: { ...font.h3, color: colors.sumi },
+  optionDesc: { ...font.small, color: colors.sumiMid, marginTop: space.xs },
+
+  // 選択の印も角を立てる。丸いラジオは使わない
+  pick: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: colors.ruleDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  radioActive: { borderColor: colors.brand, backgroundColor: colors.brand, borderWidth: 7 },
-  confirm: { backgroundColor: colors.accentSoft, marginTop: space.lg },
-  confirmTitle: { ...font.h3, color: colors.warn },
-  confirmBody: { ...font.small, color: colors.warn, marginTop: space.xs },
-  error: { ...font.small, color: colors.danger },
+  pickOn: { borderColor: colors.sumi },
+  pickDot: { width: 10, height: 10, backgroundColor: colors.sumi },
+
+  confirmLabel: { ...font.label, color: colors.shu },
+  confirmTitle: { ...font.h2, color: colors.sumi, marginTop: space.sm },
+  error: { ...font.small, color: colors.shu, marginTop: space.md },
 });

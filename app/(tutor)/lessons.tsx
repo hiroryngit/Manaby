@@ -26,30 +26,25 @@ export default function PendingLessons() {
       refreshing={loading}
       onRefresh={reload}
       ListHeaderComponent={
-        <Card style={s.notice}>
-          <Text style={s.noticeText}>
-            授業記録の入力は3〜5分で完了します。入力するとAIがレポート・指導方針・
-            生徒向けコメントを自動生成します。
-          </Text>
-        </Card>
+        <Text style={s.lead}>
+          入力は3〜5分で終わります。書き終えるとAIがレポート・生徒へのコメント・
+          指導方針を下書きします。
+        </Text>
       }
-      ListEmptyComponent={
-        <Card>
-          <Empty message="記録が未入力の授業はありません" />
-        </Card>
-      }
+      ListEmptyComponent={<Empty message="記録が未入力の授業はありません" />}
       renderItem={({ item }) => (
-        <Card>
-          <Row style={{ justifyContent: 'space-between' }}>
+        <Card mark>
+          <Row style={{ justifyContent: 'space-between', gap: space.md }}>
             <View style={{ flex: 1 }}>
               <Text style={s.name}>{item.student_name}</Text>
               <Text style={s.date}>{formatDateTime(item.held_at)}</Text>
             </View>
-            <Badge label="未入力" tone="danger" />
+            <Badge label="未入力" tone="shu" />
           </Row>
-          <View style={{ marginTop: space.md }}>
+          <View style={{ marginTop: space.lg }}>
             <Button
-              title="記録を入力する"
+              title="記録を書く"
+              variant="mark"
               onPress={() => router.push(`/(tutor)/record/${item.id}`)}
             />
           </View>
@@ -60,9 +55,8 @@ export default function PendingLessons() {
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
-  notice: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoft },
-  noticeText: { ...font.small, color: colors.brandInk, lineHeight: 20 },
-  name: { ...font.h3, color: colors.ink },
-  date: { ...font.small, color: colors.muted, marginTop: 2 },
+  wrap: { padding: space.lg, gap: space.sm, paddingBottom: space.huge },
+  lead: { ...font.small, color: colors.sumiMid, marginBottom: space.md },
+  name: { ...font.h3, color: colors.sumi },
+  date: { ...font.num, color: colors.sumiFaint, marginTop: space.xs },
 });

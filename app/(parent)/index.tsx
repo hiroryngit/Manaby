@@ -1,5 +1,8 @@
 // ③ ダッシュボード（F-03）
 // 受け入れ基準: 起動後スクロールなしで「今日やること」が判別できること
+//
+// 画面内で浮くのは「今日やること」1枚だけ。他は罫で区切る。
+// AI分析ノートには朱の傍線を立て、アプリが並べた情報と書かれたものを分ける。
 
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,15 +12,15 @@ import { useFetch, formatDateTime, formatDate } from '../../src/hooks';
 import { useSession, useViewingStudentId } from '../../src/session';
 import { ChevronRightIcon } from '../../src/components/icons';
 import {
-  Badge, Button, Card, Empty, ErrorView, Loading, Row, SectionTitle, Stars,
+  Badge, Button, Card, Empty, ErrorView, Loading, Row, ScreenHeader, SectionTitle, Stars,
 } from '../../src/components/ui';
 import { colors, font, levelColor, radius, space } from '../../src/theme';
 
 const STATUS_LABEL = {
-  not_started: { label: '未着手', tone: 'danger' as const },
-  in_progress: { label: '進行中', tone: 'warn' as const },
-  submitted: { label: '提出済', tone: 'brand' as const },
-  reviewed: { label: '確認済', tone: 'success' as const },
+  not_started: { label: '未着手', tone: 'shu' as const },
+  in_progress: { label: '進行中', tone: 'ao' as const },
+  submitted: { label: '提出済', tone: 'ao' as const },
+  reviewed: { label: '確認済', tone: 'done' as const },
 };
 
 export default function ParentHome() {
@@ -36,23 +39,23 @@ export default function ParentHome() {
   const todo = data.pending_homework.filter((h) => h.status !== 'reviewed');
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} edges={['top']}>
       <ScrollView
         contentContainerStyle={s.wrap}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor={colors.brand} />}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={reload} tintColor={colors.sumiMid} />
+        }
       >
-        <View style={s.head}>
-          <Text style={s.greeting}>{user?.display_name} さん</Text>
-          <Text style={s.student}>
-            {data.student.display_name}（{data.student.grade ?? '—'}）の学習状況
-          </Text>
-        </View>
+        <ScreenHeader
+          title={`${user?.display_name} さん`}
+          subtitle={`${data.student.display_name}（${data.student.grade ?? '学年未設定'}）の学習状況`}
+        />
 
-        {/* 画面で最も強い面。ここだけ影を強め、余白も広く取る */}
-        <Card emphasis="raised" style={s.todoCard}>
+        {/* 画面で唯一浮かせる面。ここだけ影と広い余白を持つ */}
+        <Card lift>
           <Row style={{ justifyContent: 'space-between', marginBottom: space.md }}>
             <Text style={s.todoLabel}>今日やること</Text>
-            {todo.length > 0 && <Badge label={`${todo.length}件`} tone="accent" />}
+            {todo.length > 0 && <Badge label={`${todo.length}件`} tone="shu" />}
           </Row>
 
           {todo.length === 0 ? (
@@ -62,13 +65,13 @@ export default function ParentHome() {
               const st = STATUS_LABEL[h.status];
               return (
                 <View key={h.id} style={[s.todoItem, i > 0 && s.todoDivider]}>
-                  <Row style={{ justifyContent: 'space-between' }}>
+                  <Row style={{ justifyContent: 'space-between', gap: space.md }}>
                     <View style={{ flex: 1 }}>
                       <Text style={s.todoTitle}>
-                        {h.subject}・{h.unit}
+                        {h.subject}／{h.unit}
                       </Text>
                       <Text style={s.todoMeta}>
-                        {h.question_count}問 ／ 期限 {formatDate(h.due_at)}
+                        {h.question_count}問 ・ 期限 {formatDate(h.due_at)}
                       </Text>
                     </View>
                     <Badge label={st.label} tone={st.tone} />
@@ -115,7 +118,9 @@ export default function ParentHome() {
         </Card>
 
         <SectionTitle>最新のAI分析ノート</SectionTitle>
+        {/* 講師と AI が書いたものなので朱の傍線を立てる */}
         <Card
+          mark={!!data.latest_report}
           onPress={
             data.latest_report
               ? () => router.push(`/(parent)/report/${data.latest_report!.id}`)
@@ -126,22 +131,19 @@ export default function ParentHome() {
             <Row style={{ gap: space.md }}>
               <View style={{ flex: 1 }}>
                 <Text style={s.itemTitle}>
-                  {data.latest_report.subject}・{data.latest_report.unit}
+                  {data.latest_report.subject}／{data.latest_report.unit}
                 </Text>
                 <Row style={{ marginTop: space.sm, gap: space.sm }}>
-                  <Stars value={data.latest_report.understanding_level} size={15} />
                   <Text
-                    style={[
-                      s.level,
-                      { color: levelColor(data.latest_report.understanding_level) },
-                    ]}
+                    style={[s.level, { color: levelColor(data.latest_report.understanding_level) }]}
                   >
-                    理解度 {data.latest_report.understanding_level}/5
+                    理解度 {data.latest_report.understanding_level}／5
                   </Text>
+                  <Stars value={data.latest_report.understanding_level} size={14} />
                 </Row>
                 <Text style={s.itemDate}>{formatDate(data.latest_report.generated_at)}</Text>
               </View>
-              <ChevronRightIcon color={colors.faint} size={20} />
+              <ChevronRightIcon color={colors.sumiFaint} size={20} />
             </Row>
           ) : (
             <Empty message="まだレポートがありません" />
@@ -159,31 +161,28 @@ export default function ParentHome() {
 const s = StyleSheet.create({
   wrap: { padding: space.lg, paddingBottom: space.huge },
 
-  head: { paddingHorizontal: space.xs, paddingTop: space.sm, marginBottom: space.lg },
-  greeting: { ...font.h1, color: colors.ink },
-  student: { ...font.small, color: colors.muted, marginTop: 2 },
-
-  todoCard: { backgroundColor: colors.surface },
-  todoLabel: { ...font.h2, color: colors.ink },
-  todoDone: { ...font.body, color: colors.muted, paddingVertical: space.sm },
+  todoLabel: { ...font.h2, color: colors.sumi },
+  todoDone: { ...font.body, color: colors.sumiFaint, paddingVertical: space.sm },
   todoItem: { paddingVertical: space.md },
-  todoDivider: { borderTopWidth: 1, borderTopColor: colors.border },
-  todoTitle: { ...font.h3, color: colors.ink },
-  todoMeta: { ...font.small, color: colors.muted, marginTop: 2 },
+  todoDivider: { borderTopWidth: 1, borderTopColor: colors.rule },
+  todoTitle: { ...font.h3, color: colors.sumi },
+  todoMeta: { ...font.num, color: colors.sumiFaint, marginTop: space.xs },
 
+  // 日付は桁が揃うことに意味があるので等幅で組む
   dateChip: {
-    width: 54,
-    height: 54,
-    borderRadius: radius.md,
-    backgroundColor: colors.brandSoft,
+    width: 52,
+    height: 52,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.rule,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateChipDay: { ...font.h2, color: colors.brandInk },
-  dateChipMonth: { ...font.caption, color: colors.brand },
+  dateChipDay: { ...font.numLg, color: colors.sumi },
+  dateChipMonth: { ...font.label, color: colors.sumiFaint },
 
-  itemTitle: { ...font.h3, color: colors.ink },
-  itemSub: { ...font.small, color: colors.muted, marginTop: 2 },
-  itemDate: { ...font.small, color: colors.faint, marginTop: space.sm },
+  itemTitle: { ...font.h3, color: colors.sumi },
+  itemSub: { ...font.small, color: colors.sumiMid },
+  itemDate: { ...font.num, color: colors.sumiFaint, marginTop: space.sm },
   level: { ...font.small, fontWeight: '700' },
 });

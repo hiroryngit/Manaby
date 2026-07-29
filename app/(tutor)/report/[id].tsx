@@ -2,14 +2,19 @@
 //
 // AI の出力を無検証で保護者・生徒に届けないための画面。
 // 講師が確認・修正して「確定」するまで status は draft のまま。
+//
+// ここでやっているのは AI の下書きの添削なので、編集欄そのものを朱の傍線の中に置く。
+// 箱で囲わず、朱の罫だけを枠にする。
 
 import { useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api, type Report } from '../../../src/api';
 import { useFetch } from '../../../src/hooks';
-import { Badge, Button, Card, ErrorView, Loading, Row, SectionTitle } from '../../../src/components/ui';
-import { colors, font, radius, space } from '../../../src/theme';
+import {
+  Annotation, Badge, Button, ErrorView, Input, Loading, Row,
+} from '../../../src/components/ui';
+import { colors, font, space } from '../../../src/theme';
 
 function notify(message: string) {
   if (Platform.OS === 'web') window.alert(message);
@@ -35,7 +40,7 @@ export default function ReportPreview() {
   }, [data]);
 
   if (error) return <ErrorView message={error} onRetry={reload} />;
-  if (!data) return <Loading label="AIの生成結果を読み込み中…" />;
+  if (!data) return <Loading label="AIの下書きを読み込み中…" />;
 
   const confirm = async () => {
     setBusy('confirm');
@@ -70,64 +75,69 @@ export default function ReportPreview() {
 
   return (
     <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
-      <Card style={s.header}>
-        <Row style={{ justifyContent: 'space-between' }}>
+      <View style={s.head}>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Text style={s.title}>
-            {data.subject} / {data.unit}
+            {data.subject}／{data.unit}
           </Text>
           <Badge
             label={data.status === 'confirmed' ? '確定済' : '未確定'}
-            tone={data.status === 'confirmed' ? 'success' : 'warn'}
+            tone={data.status === 'confirmed' ? 'done' : 'shu'}
           />
         </Row>
-        <Text style={s.sub}>
+        <Text style={s.lead}>
           {empty
-            ? 'AIの生成に失敗しました。手入力で作成するか、再生成してください。'
-            : '内容を確認し、必要なら修正してから確定してください。'}
+            ? 'AIの下書きに失敗しました。手入力で書くか、作り直してください。'
+            : '内容を確認し、必要なら直してから確定してください。'}
         </Text>
-      </Card>
+      </View>
 
-      <SectionTitle>保護者向けレポート</SectionTitle>
-      <TextInput
-        style={[s.input, s.tall]}
-        value={parentReport}
-        onChangeText={setParentReport}
-        multiline
-        placeholder="できたこと / つまずいた点 / 今後の方針"
-        placeholderTextColor={colors.faint}
-      />
+      <Annotation label="保護者へ" style={s.field}>
+        <Input
+          value={parentReport}
+          onChangeText={setParentReport}
+          multiline
+          minHeight={200}
+          placeholder="できたこと / つまずいた点 / 今後の方針"
+          style={s.bare}
+        />
+      </Annotation>
 
-      <SectionTitle>生徒へのメッセージ</SectionTitle>
-      <TextInput
-        style={[s.input, s.mid]}
-        value={studentMessage}
-        onChangeText={setStudentMessage}
-        multiline
-        placeholder="励ましと、次にやること1つ"
-        placeholderTextColor={colors.faint}
-      />
+      <Annotation label="生徒へ" style={s.field}>
+        <Input
+          value={studentMessage}
+          onChangeText={setStudentMessage}
+          multiline
+          minHeight={96}
+          placeholder="励ましと、次にやること1つ"
+          style={s.bare}
+        />
+      </Annotation>
 
-      <SectionTitle>指導方針（講師用メモ）</SectionTitle>
-      <TextInput
-        style={[s.input, s.mid]}
-        value={policy}
-        onChangeText={setPolicy}
-        multiline
-        placeholder="次回扱う単元とアプローチ"
-        placeholderTextColor={colors.faint}
-      />
+      <Annotation label="指導方針（講師用メモ）" style={s.field}>
+        <Input
+          value={policy}
+          onChangeText={setPolicy}
+          multiline
+          minHeight={96}
+          placeholder="次回扱う単元とアプローチ"
+          style={s.bare}
+        />
+      </Annotation>
 
-      {data.model && <Text style={s.model}>生成モデル: {data.model}</Text>}
+      {data.model && <Text style={s.model}>生成モデル {data.model}</Text>}
 
-      <View style={{ gap: space.sm, marginTop: space.lg }}>
+      <View style={{ gap: space.sm, marginTop: space.xl }}>
         <Button
           title="確定して保護者に公開"
           onPress={confirm}
           loading={busy === 'confirm'}
           disabled={!parentReport.trim()}
+          variant="mark"
+          size="lg"
         />
         <Button
-          title="AIで作り直す"
+          title="AIに書き直させる"
           variant="ghost"
           onPress={regenerate}
           loading={busy === 'regenerate'}
@@ -138,22 +148,18 @@ export default function ReportPreview() {
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, paddingBottom: space.xxl },
-  header: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
-  title: { ...font.h2, color: colors.brandInk },
-  sub: { ...font.small, color: colors.brandInk, marginTop: space.xs, lineHeight: 19 },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: space.md,
-    ...font.body,
-    color: colors.ink,
-    textAlignVertical: 'top',
-    lineHeight: 22,
+  wrap: { padding: space.lg, paddingBottom: space.huge },
+  head: { paddingBottom: space.lg },
+  title: { ...font.h1, color: colors.sumi, flex: 1, paddingRight: space.md },
+  lead: { ...font.small, color: colors.sumiMid, marginTop: space.xs },
+
+  field: { marginTop: space.xl },
+  // 朱の罫を唯一の枠にするため、入力欄そのものの箱は外す
+  bare: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
-  tall: { minHeight: 200 },
-  mid: { minHeight: 96 },
-  model: { ...font.caption, color: colors.faint, textAlign: 'center', marginTop: space.md },
+  model: { ...font.num, color: colors.sumiFaint, textAlign: 'center', marginTop: space.xl },
 });

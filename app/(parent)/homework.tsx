@@ -9,11 +9,12 @@ import { useViewingStudentId } from '../../src/session';
 import { Badge, Button, Card, Empty, ErrorView, Loading, Row } from '../../src/components/ui';
 import { colors, font, space } from '../../src/theme';
 
+// 手をつけていないものだけ朱で立てる。終わったものは静かに引く
 const STATUS = {
-  not_started: { label: '未着手', tone: 'danger' as const, next: 'in_progress' as const, cta: '取りかかる' },
-  in_progress: { label: '進行中', tone: 'warn' as const, next: 'submitted' as const, cta: '提出する' },
-  submitted: { label: '提出済', tone: 'brand' as const, next: null, cta: null },
-  reviewed: { label: '確認済', tone: 'success' as const, next: null, cta: null },
+  not_started: { label: '未着手', tone: 'shu' as const, next: 'in_progress' as const, cta: '取りかかる' },
+  in_progress: { label: '進行中', tone: 'ao' as const, next: 'submitted' as const, cta: '提出する' },
+  submitted: { label: '提出済', tone: 'ao' as const, next: null, cta: null },
+  reviewed: { label: '確認済', tone: 'done' as const, next: null, cta: null },
 };
 
 export default function HomeworkScreen() {
@@ -51,16 +52,16 @@ export default function HomeworkScreen() {
       contentContainerStyle={s.wrap}
       refreshing={loading}
       onRefresh={reload}
-      ListEmptyComponent={<Empty message="宿題はありません" />}
+      ListEmptyComponent={<Empty message="出されている宿題はありません" />}
       renderItem={({ item }) => {
         const st = STATUS[item.status];
         const open = expanded === item.id;
         return (
           <Card>
-            <Row style={{ justifyContent: 'space-between' }}>
+            <Row style={{ justifyContent: 'space-between', gap: space.md }}>
               <View style={{ flex: 1 }}>
                 <Text style={s.title}>
-                  {item.subject} / {item.unit}
+                  {item.subject}／{item.unit}
                 </Text>
                 <Text style={s.sub}>
                   {item.question_count}問 ・ 期限 {formatDate(item.due_at)}
@@ -81,7 +82,7 @@ export default function HomeworkScreen() {
               </View>
             )}
 
-            <Row style={{ gap: space.sm, marginTop: space.md }}>
+            <Row style={{ gap: space.sm, marginTop: space.lg }}>
               {item.questions.length > 0 && (
                 <View style={{ flex: 1 }}>
                   <Button
@@ -93,11 +94,7 @@ export default function HomeworkScreen() {
               )}
               {st.cta && (
                 <View style={{ flex: 1 }}>
-                  <Button
-                    title={st.cta}
-                    loading={busy === item.id}
-                    onPress={() => advance(item)}
-                  />
+                  <Button title={st.cta} loading={busy === item.id} onPress={() => advance(item)} />
                 </View>
               )}
             </Row>
@@ -109,17 +106,17 @@ export default function HomeworkScreen() {
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
-  title: { ...font.h3, color: colors.ink },
-  sub: { ...font.small, color: colors.muted, marginTop: 2 },
+  wrap: { padding: space.lg, gap: space.sm, paddingBottom: space.huge },
+  title: { ...font.h3, color: colors.sumi },
+  sub: { ...font.num, color: colors.sumiFaint, marginTop: space.xs },
   questions: {
-    marginTop: space.md,
-    paddingTop: space.md,
+    marginTop: space.lg,
+    paddingTop: space.lg,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.rule,
     gap: space.md,
   },
-  question: { flexDirection: 'row', gap: space.sm },
-  qNum: { ...font.small, color: colors.brand, fontWeight: '700', minWidth: 32 },
-  qText: { ...font.body, color: colors.ink, flex: 1, lineHeight: 22 },
+  question: { flexDirection: 'row', gap: space.md },
+  qNum: { ...font.num, color: colors.ao, minWidth: 30 },
+  qText: { ...font.body, color: colors.sumi, flex: 1 },
 });

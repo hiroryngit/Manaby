@@ -1,37 +1,25 @@
 // ④ AI分析ノート（授業レポート）（F-04）
+//
+// このアプリの中心にある成果物。講師と AI が書いた本文には朱の傍線を立て、
+// アプリが並べた情報（日付・教科・数値）とはっきり層を分ける。
 
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import type { Report } from '../../../src/api';
 import { useFetch, formatDate } from '../../../src/hooks';
-import { Badge, Card, ErrorView, Loading, Row, SectionTitle, Stars } from '../../../src/components/ui';
+import {
+  Annotation, Badge, Card, ErrorView, Loading, NoteBody, Row, Rule, SectionTitle, Stars,
+} from '../../../src/components/ui';
 import { colors, font, levelColor, space } from '../../../src/theme';
 
-/**
- * AI が返す本文は Markdown 風の見出し（**できたこと** など）を含む。
- * 見出しだけ太字にして、それ以外は本文として並べる。
- */
-function RichText({ text }: { text: string }) {
+function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <View style={{ gap: space.sm }}>
-      {text
-        .split('\n')
-        .filter((line) => line.trim())
-        .map((line, i) => {
-          const heading = line.match(/^\*\*(.+?)\*\*$/);
-          if (heading) {
-            return (
-              <Text key={i} style={s.heading}>
-                {heading[1]}
-              </Text>
-            );
-          }
-          return (
-            <Text key={i} style={s.body}>
-              {line.replace(/\*\*/g, '')}
-            </Text>
-          );
-        })}
+    <View style={{ flex: 1 }}>
+      <Text style={s.metricLabel}>{label}</Text>
+      <Row style={{ gap: space.sm, marginTop: space.xs }}>
+        <Text style={[s.metricValue, { color: levelColor(value) }]}>{value}</Text>
+        <Stars value={value} size={14} />
+      </Row>
     </View>
   );
 }
@@ -45,99 +33,85 @@ export default function ReportDetail() {
 
   return (
     <ScrollView contentContainerStyle={s.wrap}>
-      <Card style={s.header}>
-        <Row style={{ justifyContent: 'space-between' }}>
+      {/* 授業の見出し。明朝を使うのはここと画面名だけ */}
+      <View style={s.head}>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Text style={s.title}>
-            {data.subject} / {data.unit}
+            {data.subject}／{data.unit}
           </Text>
           <Badge
             label={data.status === 'confirmed' ? '確定' : '下書き'}
-            tone={data.status === 'confirmed' ? 'success' : 'warn'}
+            tone={data.status === 'confirmed' ? 'done' : 'shu'}
           />
         </Row>
         <Text style={s.date}>{formatDate(data.held_at)} の授業</Text>
 
-        <Row style={{ gap: space.lg, marginTop: space.md }}>
-          <View>
-            <Text style={s.metricLabel}>理解度</Text>
-            <Row style={{ gap: space.xs }}>
-              <Stars value={data.understanding_level} size={16} />
-              <Text style={[s.metricValue, { color: levelColor(data.understanding_level) }]}>
-                {data.understanding_level}
-              </Text>
-            </Row>
-          </View>
-          <View>
-            <Text style={s.metricLabel}>集中度</Text>
-            <Row style={{ gap: space.xs }}>
-              <Stars value={data.concentration_level} size={16} />
-              <Text style={[s.metricValue, { color: levelColor(data.concentration_level) }]}>
-                {data.concentration_level}
-              </Text>
-            </Row>
-          </View>
+        <Rule style={{ marginTop: space.lg }} />
+        <Row style={{ paddingTop: space.md }}>
+          <Metric label="理解度" value={data.understanding_level} />
+          <Metric label="集中度" value={data.concentration_level} />
         </Row>
-      </Card>
+      </View>
 
-      <SectionTitle>保護者向けレポート</SectionTitle>
-      <Card>
-        {data.parent_report ? (
-          <RichText text={data.parent_report} />
-        ) : (
-          <Text style={s.pending}>まだ生成されていません</Text>
-        )}
-      </Card>
+      <SectionTitle>保護者へ</SectionTitle>
+      {data.parent_report ? (
+        <Annotation>
+          <NoteBody text={data.parent_report} />
+        </Annotation>
+      ) : (
+        <Text style={s.pending}>まだ生成されていません</Text>
+      )}
 
       {data.student_message ? (
         <>
-          <SectionTitle>生徒へのメッセージ</SectionTitle>
-          <Card style={s.messageCard}>
+          <SectionTitle>生徒へ</SectionTitle>
+          <Annotation>
             <Text style={s.message}>{data.student_message}</Text>
-          </Card>
+          </Annotation>
         </>
       ) : null}
 
       {data.weak_units.length > 0 && (
         <>
-          <SectionTitle>苦手単元</SectionTitle>
-          <Card>
-            <Row style={{ gap: space.xs, flexWrap: 'wrap' }}>
-              {data.weak_units.map((u) => (
-                <Badge key={u} label={u} tone="danger" />
-              ))}
-            </Row>
-          </Card>
+          <SectionTitle>つまずいた単元</SectionTitle>
+          <Row style={{ gap: space.sm, flexWrap: 'wrap' }}>
+            {data.weak_units.map((u) => (
+              <Badge key={u} label={u} tone="shu" />
+            ))}
+          </Row>
         </>
       )}
 
       <SectionTitle>授業内容</SectionTitle>
       <Card>
         <Text style={s.body}>{data.content}</Text>
-        {data.tutor_comment && (
-          <Text style={[s.body, { marginTop: space.md, color: colors.muted }]}>
-            講師コメント: {data.tutor_comment}
-          </Text>
-        )}
       </Card>
 
-      {data.model && (
-        <Text style={s.model}>生成モデル: {data.model}</Text>
-      )}
+      {data.tutor_comment ? (
+        <>
+          <SectionTitle>講師のコメント</SectionTitle>
+          <Annotation>
+            <Text style={s.body}>{data.tutor_comment}</Text>
+          </Annotation>
+        </>
+      ) : null}
+
+      {data.model && <Text style={s.model}>生成モデル {data.model}</Text>}
     </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, gap: space.sm, paddingBottom: space.xxl },
-  header: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoft },
-  title: { ...font.h2, color: colors.brandInk },
-  date: { ...font.small, color: colors.brandInk, marginTop: 2 },
-  metricLabel: { ...font.caption, color: colors.muted, marginBottom: 2 },
-  metricValue: { ...font.h3 },
-  heading: { ...font.h3, color: colors.ink, marginTop: space.sm },
-  body: { ...font.body, color: colors.ink, lineHeight: 23 },
-  pending: { ...font.body, color: colors.muted },
-  messageCard: { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' },
-  message: { ...font.body, color: '#9A3412', lineHeight: 23 },
-  model: { ...font.caption, color: colors.faint, textAlign: 'center', marginTop: space.lg },
+  wrap: { padding: space.lg, paddingBottom: space.huge },
+
+  head: { paddingBottom: space.sm },
+  title: { ...font.h1, color: colors.sumi, flex: 1, paddingRight: space.md },
+  date: { ...font.num, color: colors.sumiFaint, marginTop: space.xs },
+  metricLabel: { ...font.label, color: colors.sumiFaint },
+  metricValue: font.numLg,
+
+  body: { ...font.body, color: colors.sumi },
+  message: { ...font.body, color: colors.sumi },
+  pending: { ...font.body, color: colors.sumiFaint },
+  model: { ...font.num, color: colors.sumiFaint, textAlign: 'center', marginTop: space.xl },
 });

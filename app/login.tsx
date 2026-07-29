@@ -5,13 +5,14 @@ import { useRouter } from 'expo-router';
 import { api, type User } from '../src/api';
 import { GOOGLE_READY, signInWithGoogle } from '../src/auth';
 import { useSession } from '../src/session';
-import { Badge, Button, Card, Row } from '../src/components/ui';
-import { colors, font, space } from '../src/theme';
+import { Badge, Button, Card, Row, type Tone } from '../src/components/ui';
+import { colors, font, radius, space } from '../src/theme';
 
-const ROLE_LABEL: Record<string, { label: string; tone: 'success' | 'brand' | 'warn' | 'neutral' }> = {
-  parent: { label: '保護者', tone: 'success' },
-  student: { label: '生徒', tone: 'brand' },
-  tutor: { label: '講師', tone: 'warn' },
+// 講師は書き込む側なので朱。読む側は藍
+const ROLE_LABEL: Record<string, { label: string; tone: Tone }> = {
+  parent: { label: '保護者', tone: 'ao' },
+  student: { label: '生徒', tone: 'ao' },
+  tutor: { label: '講師', tone: 'shu' },
   admin: { label: '管理者', tone: 'neutral' },
 };
 
@@ -52,28 +53,21 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
       <ScrollView contentContainerStyle={s.wrap}>
         <View style={s.hero}>
           <Image source={require('../assets/icon.png')} style={s.logo} />
           <Text style={s.title}>manaby</Text>
-          <Text style={s.lead}>授業の価値を最大化し、学習の習慣化を支援する</Text>
+          <Text style={s.lead}>授業で起きたことを、残す。</Text>
         </View>
 
-        <Button
-          title="Google でログイン"
-          onPress={google}
-          loading={busy}
-          disabled={!GOOGLE_READY}
-        />
+        <Button title="Google でログイン" onPress={google} loading={busy} disabled={!GOOGLE_READY} />
 
         {!GOOGLE_READY && (
-          <Card style={s.notice}>
-            <Text style={s.noticeText}>
-              Google ログインは設定待ちです（OAuth クライアント ID が未登録）。
-              動作確認用に、登録済みの利用者でログインできます。
-            </Text>
-          </Card>
+          <Text style={s.notice}>
+            Google ログインは設定待ちです（OAuth クライアント ID が未登録）。
+            動作確認用に、登録済みの利用者でログインできます。
+          </Text>
         )}
 
         {error && <Text style={s.error}>{error}</Text>}
@@ -107,13 +101,13 @@ export default function Login() {
 }
 
 const s = StyleSheet.create({
-  wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
-  hero: { alignItems: 'center', paddingVertical: space.xl, gap: space.xs },
-  logo: { width: 72, height: 72, borderRadius: 18 },
-  title: { ...font.h1, color: colors.ink, marginTop: space.sm },
-  lead: { ...font.small, color: colors.muted, textAlign: 'center' },
-  notice: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoft },
-  noticeText: { ...font.small, color: colors.brandInk, lineHeight: 20 },
-  name: { ...font.h3, color: colors.ink },
-  error: { ...font.small, color: colors.danger },
+  wrap: { padding: space.lg, gap: space.sm, paddingBottom: space.huge },
+  hero: { alignItems: 'center', paddingTop: space.huge, paddingBottom: space.xxl, gap: space.xs },
+  logo: { width: 64, height: 64, borderRadius: radius.lg },
+  // ロゴタイプは明朝。書名のように置く
+  title: { ...font.display, color: colors.sumi, marginTop: space.md },
+  lead: { ...font.small, color: colors.sumiMid, textAlign: 'center' },
+  notice: { ...font.small, color: colors.sumiMid, marginTop: space.md },
+  name: { ...font.h3, color: colors.sumi },
+  error: { ...font.small, color: colors.shu },
 });

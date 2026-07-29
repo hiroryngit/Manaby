@@ -37,10 +37,12 @@ function Guard() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.brand,
-        headerTitleStyle: { ...font.h2, color: colors.ink },
-        contentStyle: { backgroundColor: colors.bg },
+        // ヘッダーは紙と同じ地色にして段差を作らない。区切りは罫に任せる
+        headerStyle: { backgroundColor: colors.paper },
+        headerShadowVisible: false,
+        headerTintColor: colors.sumi,
+        headerTitleStyle: { ...font.h2, color: colors.sumi },
+        contentStyle: { backgroundColor: colors.paper },
       }}
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />
