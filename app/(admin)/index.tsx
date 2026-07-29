@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { api, type AdminUser, type Role } from '../../src/api';
 import { useFetch } from '../../src/hooks';
+import { AdminAuthError, isAuthFailure } from '../../src/components/AdminAuthError';
 import { confirmDestructive } from '../../src/dialog';
 import { homeRoute, useSession } from '../../src/session';
 import {
@@ -28,7 +29,7 @@ type Filter = 'all' | 'parent' | 'student' | 'tutor';
 export default function AdminUsers() {
   const router = useRouter();
   const { user, deactivateAdmin } = useSession();
-  const { data, error, loading, reload } = useFetch<AdminUser[]>('/admin/users');
+  const { data, error, status, loading, reload } = useFetch<AdminUser[]>('/admin/users');
 
   const [filter, setFilter] = useState<Filter>('all');
   // 紐付けは「生徒を選ぶ → 保護者を選ぶ」の2手。選択中の生徒をここに持つ
@@ -36,6 +37,8 @@ export default function AdminUsers() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ id: string; message: string; failed: boolean } | null>(null);
 
+  // 認証で弾かれた場合、再読み込みしても永久に直らない。合言葉の画面へ逃がす
+  if (error && isAuthFailure(status)) return <AdminAuthError message={error} />;
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
 

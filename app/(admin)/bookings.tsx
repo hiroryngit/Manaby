@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { api, type AdminBooking } from '../../src/api';
 import { useFetch, formatDateTime } from '../../src/hooks';
+import { AdminAuthError, isAuthFailure } from '../../src/components/AdminAuthError';
 import { confirmDestructive } from '../../src/dialog';
 import {
   Badge, Button, Card, Empty, ErrorView, Loading, Row, type Tone,
@@ -22,10 +23,12 @@ const STATUS: Record<AdminBooking['status'], { label: string; tone: Tone }> = {
 };
 
 export default function AdminBookings() {
-  const { data, error, loading, reload } = useFetch<AdminBooking[]>('/admin/bookings');
+  const { data, error, status, loading, reload } = useFetch<AdminBooking[]>('/admin/bookings');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ id: string; message: string } | null>(null);
 
+  // 認証で弾かれた場合、再読み込みしても永久に直らない。合言葉の画面へ逃がす
+  if (error && isAuthFailure(status)) return <AdminAuthError message={error} />;
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
 

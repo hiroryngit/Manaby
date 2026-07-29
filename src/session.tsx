@@ -70,12 +70,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
+  /** 管理トークンを記憶する。メモリ（api が読む）と保存領域の両方に置く */
+  const keepAdminToken = async (token: string | null) => {
+    setAdminToken(token);
+    if (token) await AsyncStorage.setItem(ADMIN_TOKEN_KEY, token);
+    else await AsyncStorage.removeItem(ADMIN_TOKEN_KEY);
+  };
+
   const resolveAccount: SessionValue['resolveAccount'] = async (idToken) => {
     const res = await api.post<{
       user?: User;
       needs_onboarding?: boolean;
       profile?: GoogleProfile;
+      admin_token?: string;
     }>('/auth/session', { id_token: idToken });
+
+    // 管理者はログインのたびに管理トークンを受け取る。
+    // これを取りこぼすと、管理画面には入れるのに全ての管理 API が 401 になる
+    if (res.user?.is_admin) await keepAdminToken(res.admin_token ?? null);
     return { user: res.user ?? null, profile: res.profile };
   };
 
@@ -91,20 +103,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
 
   const activateAdmin: SessionValue['activateAdmin'] = async ({ idToken, password }) => {
-    const res = await api.post<{ user: User; admin_token: string }>('/auth/admin/activate', {
+    const res = await api.post<{ user: User; admin_token?: string }>('/auth/admin/activate', {
       id_token: idToken,
       password,
     });
-    setAdminToken(res.admin_token);
-    await AsyncStorage.setItem(ADMIN_TOKEN_KEY, res.admin_token);
+    // トークンが無いまま先へ進むと、管理画面には入れるのに何も読めない状態になる。
+    // 黙って通さず、ここで止める
+    if (!res.admin_token) throw new Error('管理者トークンを受け取れませんでした');
+
+    await keepAdminToken(res.admin_token);
     await signIn(res.user);
     return res.user;
   };
 
   const deactivateAdmin: SessionValue['deactivateAdmin'] = async () => {
     const res = await api.post<{ user: User }>('/auth/admin/deactivate');
-    setAdminToken(null);
-    await AsyncStorage.removeItem(ADMIN_TOKEN_KEY);
+    await keepAdminToken(null);
     await signIn(res.user);
   };
 

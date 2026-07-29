@@ -64,7 +64,20 @@ function parseUtc(value) {
   return new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`).getTime();
 }
 
-async function issueToken(userId) {
+/**
+ * 管理トークンを発行する。
+ *
+ * 合言葉のときだけでなく、ログインのたびにも呼ぶ。
+ * 合言葉は「管理者属性を付ける」ための関門であって、以後の本人確認は Google が担う。
+ * ここを合言葉限定にすると、is_admin は立っているのにトークンだけ無い状態が生まれ、
+ * 管理画面に入れるのに全ての管理 API が 401 になる（実際にそうなった）。
+ */
+export async function issueAdminSession(userId) {
+  // 溜まり続けないよう、期限切れはここで掃除する
+  await run("delete from admin_sessions where user_id = ? and expires_at < datetime('now')", [
+    userId,
+  ]);
+
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400_000).toISOString();
   await run('insert into admin_sessions (token_hash, user_id, expires_at) values (?,?,?)', [
@@ -123,7 +136,7 @@ export async function activate({ id_token, password }) {
     user = { id, display_name: identity.displayName, role: 'admin' };
   }
 
-  const { token, expiresAt } = await issueToken(user.id);
+  const { token, expiresAt } = await issueAdminSession(user.id);
   return {
     user: { id: user.id, display_name: user.display_name, role: user.role, is_admin: true },
     admin_token: token,

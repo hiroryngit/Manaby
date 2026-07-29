@@ -4,7 +4,7 @@ import { all, one, run, parseJson, newId } from './db.mjs';
 import { generateReport, generateHomework } from './ai.mjs';
 import { loadFreeModels, statusSnapshot } from './models.mjs';
 import { verifyIdToken, exchangeCode } from './google.mjs';
-import { activate, deactivate, requireAdmin } from './admin.mjs';
+import { activate, deactivate, issueAdminSession, requireAdmin } from './admin.mjs';
 
 const bad = (status, message) => Object.assign(new Error(message), { status });
 
@@ -444,9 +444,19 @@ export const routes = {
       'select id, display_name, role, is_admin from users where auth_uid = ?',
       [identity.uid],
     );
-    return user
-      ? { user: shapeUser(user) }
-      : { needs_onboarding: true, profile: { email: identity.email, name: identity.displayName } };
+    if (!user) {
+      return { needs_onboarding: true, profile: { email: identity.email, name: identity.displayName } };
+    }
+
+    // 管理者はここでも管理トークンを取り直す。
+    // 合言葉は属性を付けるための関門で、以後の本人確認は Google が担う。
+    // これが無いと、ログインし直した管理者は is_admin だけ持ってトークンを失い、
+    // 管理画面に入れるのに全ての管理 API が 401 になる。
+    const session = user.is_admin ? await issueAdminSession(user.id) : null;
+    return {
+      user: shapeUser(user),
+      ...(session ? { admin_token: session.token, admin_token_expires_at: session.expiresAt } : {}),
+    };
   },
 
   // 初回登録。役割とプロフィールはここでのみ決まり、役割は以後変更できない。

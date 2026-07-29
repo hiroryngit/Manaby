@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { GOOGLE_READY, signInWithGoogle } from '../src/auth';
 import { homeRoute, useSession } from '../src/session';
-import { Button, Card, ScreenHeader, SectionTitle } from '../src/components/ui';
+import { Button, ScreenHeader, SectionTitle } from '../src/components/ui';
 import { colors, font, space } from '../src/theme';
 
 export default function AdminUnlock() {
@@ -63,63 +63,55 @@ export default function AdminUnlock() {
           subtitle="合言葉を知っている人だけが管理画面に入れます。"
         />
 
-        {user?.is_admin ? (
-          <Card style={{ marginTop: space.lg }}>
-            <Text style={s.state}>
-              {user.display_name} さんは現在、管理者として認証されています。
-            </Text>
-            <View style={{ gap: space.sm, marginTop: space.lg }}>
-              <Button title="管理画面をひらく" onPress={() => router.replace('/(admin)')} />
-              <Button
-                title="管理者権限を解除する"
-                variant="ghost"
-                loading={busy === 'deactivate'}
-                onPress={revoke}
-              />
-            </View>
-            {error && <Text style={s.error}>{error}</Text>}
-          </Card>
-        ) : (
-          <>
-            <SectionTitle>合言葉</SectionTitle>
-            {/* パスワード欄は共通の Input を使わない。secureTextEntry と
-                自動補完の抑止が要るため、ここだけ直に組む */}
-            <TextInput
-              value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                setError(null);
-              }}
-              placeholder="サーバーに設定された合言葉"
-              placeholderTextColor={colors.sumiFaint}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-              style={s.field}
-              onSubmitEditing={unlock}
+        {/* 合言葉の欄は、既に管理者であっても必ず出す。
+            管理トークンだけを失った状態（権限はあるのに管理 API が 401 を返す）から
+            戻る手段がここしか無く、隠すと詰む */}
+        <SectionTitle>合言葉</SectionTitle>
+        {/* パスワード欄は共通の Input を使わない。secureTextEntry と
+            自動補完の抑止が要るため、ここだけ直に組む */}
+        <TextInput
+          value={password}
+          onChangeText={(v) => {
+            setPassword(v);
+            setError(null);
+          }}
+          placeholder="サーバーに設定された合言葉"
+          placeholderTextColor={colors.sumiFaint}
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="password"
+          style={s.field}
+          onSubmitEditing={unlock}
+        />
+
+        <Text style={s.note}>
+          {user?.is_admin
+            ? `${user.display_name} さんには既に管理者属性が付いています。管理画面が開けないときは、合言葉を入れ直してください。`
+            : `認証すると、この Google アカウントに管理者属性が付きます。役割（${roleLabel(user)}）は変わりません。`}
+        </Text>
+
+        {error && <Text style={s.error}>{error}</Text>}
+
+        <View style={{ gap: space.sm, marginTop: space.xl }}>
+          <Button
+            title="認証する"
+            onPress={unlock}
+            loading={busy === 'activate'}
+            disabled={!GOOGLE_READY}
+          />
+          {!GOOGLE_READY && (
+            <Text style={s.note}>Google ログインが未設定のため認証できません。</Text>
+          )}
+          {user?.is_admin && (
+            <Button
+              title="管理者権限を解除する"
+              variant="ghost"
+              loading={busy === 'deactivate'}
+              onPress={revoke}
             />
-
-            <Text style={s.note}>
-              認証すると、この Google アカウントに管理者属性が付きます。
-              役割（{roleLabel(user)}）は変わりません。
-            </Text>
-
-            {error && <Text style={s.error}>{error}</Text>}
-
-            <View style={{ marginTop: space.xl }}>
-              <Button
-                title="認証する"
-                onPress={unlock}
-                loading={busy === 'activate'}
-                disabled={!GOOGLE_READY}
-              />
-              {!GOOGLE_READY && (
-                <Text style={s.note}>Google ログインが未設定のため認証できません。</Text>
-              )}
-            </View>
-          </>
-        )}
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -141,7 +133,6 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.ruleDeep,
   },
-  state: { ...font.body, color: colors.sumi },
   note: { ...font.small, color: colors.sumiMid, marginTop: space.md },
   error: { ...font.small, color: colors.shu, marginTop: space.md },
 });
