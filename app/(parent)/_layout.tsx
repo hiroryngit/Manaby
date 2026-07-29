@@ -1,11 +1,16 @@
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChartIcon, HomeIcon, HomeworkIcon, SearchIcon } from '../../src/components/icons';
 import { HAIRLINE, colors, font } from '../../src/theme';
 
 type TabIconProps = { color: ColorValue; focused: boolean };
 
 export default function ParentLayout() {
+  // 高さを固定すると下端のインセットが効かなくなり、
+  // ホームインジケーターのある端末でラベルが隠れる。自分で足す
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -16,9 +21,9 @@ export default function ParentLayout() {
           backgroundColor: colors.sheet,
           borderTopWidth: HAIRLINE,
           borderTopColor: colors.rule,
-          height: 60,
+          height: 60 + insets.bottom,
           paddingTop: 6,
-          paddingBottom: 8,
+          paddingBottom: 8 + insets.bottom,
         },
         tabBarLabelStyle: font.tab,
         headerStyle: { backgroundColor: colors.paper },

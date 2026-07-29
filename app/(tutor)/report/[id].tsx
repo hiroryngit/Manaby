@@ -6,66 +6,98 @@
 // ここでやっているのは AI の下書きの添削なので、編集欄そのものを朱の傍線の中に置く。
 // 箱で囲わず、朱の罫だけを枠にする。
 
-import { useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api, type Report } from '../../../src/api';
 import { useFetch } from '../../../src/hooks';
+import { confirmDestructive, notify } from '../../../src/dialog';
 import {
   Annotation, Badge, Button, ErrorView, Input, Loading, Row,
 } from '../../../src/components/ui';
 import { colors, font, space } from '../../../src/theme';
 
-function notify(message: string) {
-  if (Platform.OS === 'web') window.alert(message);
-  else Alert.alert(message);
-}
+type Draft = { parentReport: string; studentMessage: string; policy: string };
+
+const toDraft = (r: Report): Draft => ({
+  parentReport: r.parent_report ?? '',
+  studentMessage: r.student_message ?? '',
+  policy: r.teaching_policy ?? '',
+});
 
 export default function ReportPreview() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data, error, reload } = useFetch<Report>(id ? `/reports/${id}` : null);
 
-  const [parentReport, setParentReport] = useState('');
-  const [studentMessage, setStudentMessage] = useState('');
-  const [policy, setPolicy] = useState('');
+  const [draft, setDraft] = useState<Draft>({ parentReport: '', studentMessage: '', policy: '' });
+  const [syncedFrom, setSyncedFrom] = useState<Report | null>(null);
   const [busy, setBusy] = useState<'confirm' | 'regenerate' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // 取得後に編集用の state へ流し込む
-  useEffect(() => {
-    if (!data) return;
-    setParentReport(data.parent_report ?? '');
-    setStudentMessage(data.student_message ?? '');
-    setPolicy(data.teaching_policy ?? '');
-  }, [data]);
+  // 取得結果を編集用の状態へ写す。useFetch は取得のたびに別のオブジェクトを返すので、
+  // その同一性を見て描画中に写す（useEffect にすると1フレーム古い値が出る）。
+  if (data && data !== syncedFrom) {
+    setSyncedFrom(data);
+    setDraft(toDraft(data));
+  }
 
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading label="AIの下書きを読み込み中…" />;
 
+  const edit = (patch: Partial<Draft>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    setActionError(null);
+  };
+
+  const saved = toDraft(data);
+  const dirty =
+    draft.parentReport !== saved.parentReport ||
+    draft.studentMessage !== saved.studentMessage ||
+    draft.policy !== saved.policy;
+
   const confirm = async () => {
+    const ok = await confirmDestructive({
+      title: '保護者と生徒に公開します',
+      message: '公開すると確定し、この画面からは取り消せません。',
+      confirmLabel: '公開する',
+    });
+    if (!ok) return;
+
     setBusy('confirm');
+    setActionError(null);
     try {
       await api.post(`/reports/${id}/confirm`, {
-        parent_report: parentReport,
-        student_message: studentMessage,
-        teaching_policy: policy,
+        parent_report: draft.parentReport,
+        student_message: draft.studentMessage,
+        teaching_policy: draft.policy,
       });
       notify('確定しました。保護者と生徒に通知されます。');
       router.replace('/(tutor)');
     } catch (e) {
-      notify(e instanceof Error ? e.message : '確定に失敗しました');
-    } finally {
+      setActionError(e instanceof Error ? e.message : '確定に失敗しました');
       setBusy(null);
     }
   };
 
   const regenerate = async () => {
+    // 書き直すと編集中の内容は失われる。失うものがあるときだけ確認する
+    if (dirty) {
+      const ok = await confirmDestructive({
+        title: 'AIに書き直させます',
+        message: 'いま書きかけの内容は破棄されます。元には戻せません。',
+        confirmLabel: '破棄して書き直す',
+      });
+      if (!ok) return;
+    }
+
     setBusy('regenerate');
+    setActionError(null);
     try {
       await api.post(`/reports/${id}/regenerate`);
       reload();
     } catch (e) {
-      notify(e instanceof Error ? e.message : '再生成に失敗しました');
+      setActionError(e instanceof Error ? e.message : '書き直しに失敗しました');
     } finally {
       setBusy(null);
     }
@@ -94,8 +126,8 @@ export default function ReportPreview() {
 
       <Annotation label="保護者へ" style={s.field}>
         <Input
-          value={parentReport}
-          onChangeText={setParentReport}
+          value={draft.parentReport}
+          onChangeText={(v) => edit({ parentReport: v })}
           multiline
           minHeight={200}
           placeholder="できたこと / つまずいた点 / 今後の方針"
@@ -105,8 +137,8 @@ export default function ReportPreview() {
 
       <Annotation label="生徒へ" style={s.field}>
         <Input
-          value={studentMessage}
-          onChangeText={setStudentMessage}
+          value={draft.studentMessage}
+          onChangeText={(v) => edit({ studentMessage: v })}
           multiline
           minHeight={96}
           placeholder="励ましと、次にやること1つ"
@@ -116,8 +148,8 @@ export default function ReportPreview() {
 
       <Annotation label="指導方針（講師用メモ）" style={s.field}>
         <Input
-          value={policy}
-          onChangeText={setPolicy}
+          value={draft.policy}
+          onChangeText={(v) => edit({ policy: v })}
           multiline
           minHeight={96}
           placeholder="次回扱う単元とアプローチ"
@@ -127,12 +159,15 @@ export default function ReportPreview() {
 
       {data.model && <Text style={s.model}>生成モデル {data.model}</Text>}
 
+      {/* 失敗はダイアログではなく操作の隣に出す */}
+      {actionError && <Text style={s.error}>{actionError}</Text>}
+
       <View style={{ gap: space.sm, marginTop: space.xl }}>
         <Button
           title="確定して保護者に公開"
           onPress={confirm}
           loading={busy === 'confirm'}
-          disabled={!parentReport.trim()}
+          disabled={!draft.parentReport.trim()}
           variant="mark"
           size="lg"
         />
@@ -162,4 +197,5 @@ const s = StyleSheet.create({
     paddingVertical: 0,
   },
   model: { ...font.num, color: colors.sumiFaint, textAlign: 'center', marginTop: space.xl },
+  error: { ...font.small, color: colors.shu, marginTop: space.lg },
 });

@@ -12,7 +12,7 @@ import { useViewingStudentId } from '../../src/session';
 import { RadarChart } from '../../src/components/RadarChart';
 import { ChevronRightIcon } from '../../src/components/icons';
 import {
-  Badge, Card, Empty, ErrorView, LevelBar, Loading, Row, SectionTitle, Stars,
+  Badge, Button, Card, Empty, ErrorView, LevelBar, Loading, Row, SectionTitle, Stars,
 } from '../../src/components/ui';
 import { colors, font, levelColor, needsAttention, space } from '../../src/theme';
 
@@ -68,7 +68,16 @@ export default function RecordScreen() {
       <SectionTitle>指導履歴</SectionTitle>
       {data.lessons.length === 0 ? (
         <Card>
-          <Empty message="授業の記録がまだありません" />
+          <Empty
+            message="授業の記録がまだありません"
+            action={
+              <Button
+                title="講師を探す"
+                variant="secondary"
+                onPress={() => router.push('/(parent)/tutors')}
+              />
+            }
+          />
         </Card>
       ) : (
         <View style={{ gap: space.sm }}>

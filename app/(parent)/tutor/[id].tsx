@@ -1,8 +1,8 @@
 // ② 講師プロフィール + 予約リクエスト（F-02）
 
 import { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api, type TutorDetail } from '../../../src/api';
 import { useFetch, formatDateTime } from '../../../src/hooks';
 import { useViewingStudentId } from '../../../src/session';
@@ -11,18 +11,17 @@ import {
 } from '../../../src/components/ui';
 import { colors, font, space } from '../../../src/theme';
 
-function notify(message: string) {
-  // React Native の Alert は web で表示されないため分岐する
-  if (Platform.OS === 'web') window.alert(message);
-  else Alert.alert(message);
-}
+/** 予約の結果はその日程の行に出す。どの枠の話か分からなくなるダイアログにはしない */
+type SlotNote = { id: string; message: string; failed: boolean };
 
 export default function TutorProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const { studentId } = useViewingStudentId();
   const { data, error, reload } = useFetch<TutorDetail>(id ? `/tutors/${id}` : null);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [requested, setRequested] = useState<string[]>([]);
+  const [note, setNote] = useState<SlotNote | null>(null);
 
   if (error) return <ErrorView message={error} onRetry={reload} />;
   if (!data) return <Loading />;
@@ -30,12 +29,17 @@ export default function TutorProfile() {
   const requestBooking = async (slotId: string, startsAt: string) => {
     if (!studentId) return;
     setRequesting(slotId);
+    setNote(null);
     try {
       await api.post('/bookings', { student_id: studentId, tutor_id: id, starts_at: startsAt });
       setRequested((r) => [...r, slotId]);
-      notify('予約をリクエストしました。講師の承認をお待ちください。');
+      setNote({ id: slotId, message: '講師の承認をお待ちください。', failed: false });
     } catch (e) {
-      notify(e instanceof Error ? e.message : '予約に失敗しました');
+      setNote({
+        id: slotId,
+        message: e instanceof Error ? e.message : '予約に失敗しました',
+        failed: true,
+      });
     } finally {
       setRequesting(null);
     }
@@ -77,12 +81,16 @@ export default function TutorProfile() {
       <SectionTitle>空き日程</SectionTitle>
       {data.availabilities.length === 0 ? (
         <Card>
-          <Empty message="現在公開されている空き日程はありません" />
+          <Empty
+            message="この講師の空き日程はまだ公開されていません"
+            action={<Button title="他の講師を見る" variant="secondary" onPress={() => router.back()} />}
+          />
         </Card>
       ) : (
         <View style={{ gap: space.sm }}>
           {data.availabilities.map((a) => {
             const done = requested.includes(a.id);
+            const slotNote = note?.id === a.id ? note : null;
             return (
               <Card key={a.id}>
                 <Row style={{ justifyContent: 'space-between', gap: space.md }}>
@@ -98,6 +106,11 @@ export default function TutorProfile() {
                     onPress={() => requestBooking(a.id, a.starts_at)}
                   />
                 </Row>
+                {slotNote && (
+                  <Text style={[s.note, slotNote.failed && { color: colors.shu }]}>
+                    {slotNote.message}
+                  </Text>
+                )}
               </Card>
             );
           })}
@@ -133,4 +146,5 @@ const s = StyleSheet.create({
   num: { ...font.num, color: colors.sumiFaint },
   body: { ...font.body, color: colors.sumi, marginTop: space.md },
   slot: { ...font.h3, color: colors.sumi },
+  note: { ...font.small, color: colors.sumiMid, marginTop: space.md },
 });

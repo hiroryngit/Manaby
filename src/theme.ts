@@ -65,8 +65,12 @@ export const radius = { xs: 2, sm: 3, md: 5, lg: 7 } as const;
  * 書体。3つの役割に割る。
  * 明朝 … 見出し。教科書と通知表の書体で、この領域では借り物ではない。
  *        ただし小さいと潰れるので 18pt 以上に限り、太らせない（和文明朝の bold は濁る）。
- * ゴシック … 本文。長時間読む側の負担を優先する。
- * 等幅 … 日付・件数・点数。桁が揃うことに意味がある値だけ。
+ * ゴシック … 本文と数値。長時間読む側の負担を優先する。
+ *
+ * 数値専用の等幅書体は持たない。この画面の「データ」は
+ * 「5問 ・ 期限 7月29日」のように和文と数字が同じ行に混ざるため、
+ * 欧文等幅を当てると数字だけ別の書体に落ちて行がばらつく。
+ * 桁を揃える目的は fontVariant の tabular-nums で足りる。
  */
 const family = {
   mincho: Platform.select({
@@ -79,12 +83,10 @@ const family = {
     android: 'sans-serif',
     default: "'Hiragino Sans','Yu Gothic',YuGothic,'Noto Sans JP',system-ui,sans-serif",
   }),
-  mono: Platform.select({
-    ios: 'Menlo',
-    android: 'monospace',
-    default: "ui-monospace,SFMono-Regular,Menlo,'Roboto Mono',monospace",
-  }),
 } as const;
+
+/** 桁が揃うことに意味がある値に付ける */
+const tabular: ['tabular-nums'] = ['tabular-nums'];
 
 /** 日本語は字面が大きく、欧文より広い行間を必要とする。本文は 1.8 倍を確保する */
 export const font = {
@@ -116,8 +118,21 @@ export const font = {
   },
   /** タブ。ラベルは4文字前後なので字間は詰める */
   tab: { fontFamily: family.gothic, fontSize: 10.5, fontWeight: '600', lineHeight: 14 },
-  num: { fontFamily: family.mono, fontSize: 13, fontWeight: '600', lineHeight: 18 },
-  numLg: { fontFamily: family.mono, fontSize: 22, fontWeight: '600', lineHeight: 26 },
+  /** 日付・件数・点数。和文と混ざる行でも書体は本文と揃え、桁だけ揃える */
+  num: {
+    fontFamily: family.gothic,
+    fontSize: 13,
+    fontWeight: '400',
+    lineHeight: 20,
+    fontVariant: tabular,
+  },
+  numLg: {
+    fontFamily: family.gothic,
+    fontSize: 21,
+    fontWeight: '700',
+    lineHeight: 28,
+    fontVariant: tabular,
+  },
 } as const;
 
 /**

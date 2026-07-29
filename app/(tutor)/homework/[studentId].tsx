@@ -2,9 +2,10 @@
 // AI生成 と 手入力 を切り替える。AI の結果は確定前に必ず確認できる。
 
 import { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api, type Question } from '../../../src/api';
+import { notify } from '../../../src/dialog';
 import {
   Button, Card, Chip, Input, Row, SectionTitle, Segmented,
 } from '../../../src/components/ui';
@@ -17,11 +18,6 @@ const DIFFICULTIES = [
   { value: 2, label: '標準' },
   { value: 3, label: '難' },
 ];
-
-function notify(message: string) {
-  if (Platform.OS === 'web') window.alert(message);
-  else Alert.alert(message);
-}
 
 export default function HomeworkSetup() {
   const { studentId } = useLocalSearchParams<{ studentId: string }>();

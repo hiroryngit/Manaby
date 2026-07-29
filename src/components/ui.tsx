@@ -400,10 +400,16 @@ export function ErrorView({ message, onRetry }: { message: string; onRetry?: () 
   );
 }
 
-export function Empty({ message }: { message: string }) {
+/**
+ * 空の状態。次にできることが1つでもあるなら action を渡す。
+ * 逆に、利用者にできることが本当に無い場合（講師が1人も登録されていない等）は
+ * 渡さない — 押しても何も進まないボタンを置く方が不親切になる。
+ */
+export function Empty({ message, action }: { message: string; action?: ReactNode }) {
   return (
     <View style={s.center}>
       <Text style={s.centerText}>{message}</Text>
+      {action && <View style={{ marginTop: space.md, minWidth: 180 }}>{action}</View>}
     </View>
   );
 }
