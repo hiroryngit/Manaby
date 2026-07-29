@@ -63,6 +63,6 @@ const s = StyleSheet.create({
   wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
   notice: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoft },
   noticeText: { ...font.small, color: colors.brandInk, lineHeight: 20 },
-  name: { ...font.h3, color: colors.text },
+  name: { ...font.h3, color: colors.ink },
   date: { ...font.small, color: colors.muted, marginTop: 2 },
 });

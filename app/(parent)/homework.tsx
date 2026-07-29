@@ -110,7 +110,7 @@ export default function HomeworkScreen() {
 
 const s = StyleSheet.create({
   wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
-  title: { ...font.h3, color: colors.text },
+  title: { ...font.h3, color: colors.ink },
   sub: { ...font.small, color: colors.muted, marginTop: 2 },
   questions: {
     marginTop: space.md,
@@ -121,5 +121,5 @@ const s = StyleSheet.create({
   },
   question: { flexDirection: 'row', gap: space.sm },
   qNum: { ...font.small, color: colors.brand, fontWeight: '700', minWidth: 32 },
-  qText: { ...font.body, color: colors.text, flex: 1, lineHeight: 22 },
+  qText: { ...font.body, color: colors.ink, flex: 1, lineHeight: 22 },
 });

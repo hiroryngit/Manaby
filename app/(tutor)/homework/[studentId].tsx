@@ -240,7 +240,7 @@ const s = StyleSheet.create({
     padding: space.md,
     minHeight: 48,
     ...font.body,
-    color: colors.text,
+    color: colors.ink,
     textAlignVertical: 'top',
   },
   chip: {
@@ -252,8 +252,8 @@ const s = StyleSheet.create({
     ...font.small,
   },
   qNum: { ...font.small, color: colors.brand, fontWeight: '700', minWidth: 32 },
-  qText: { ...font.body, color: colors.text, flex: 1, lineHeight: 22 },
+  qText: { ...font.body, color: colors.ink, flex: 1, lineHeight: 22 },
   answer: { ...font.small, color: colors.muted, marginTop: space.sm, marginLeft: 40 },
-  model: { ...font.tiny, color: colors.faint, textAlign: 'center' },
+  model: { ...font.caption, color: colors.faint, textAlign: 'center' },
   error: { ...font.small, color: colors.danger, marginTop: space.md },
 });

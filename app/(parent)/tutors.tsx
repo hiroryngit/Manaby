@@ -66,7 +66,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { ...font.h2, color: colors.brandInk },
-  name: { ...font.h3, color: colors.text },
+  name: { ...font.h3, color: colors.ink },
   rating: { ...font.small, color: colors.muted },
   policy: { ...font.small, color: colors.muted, marginTop: space.md, lineHeight: 19 },
 });

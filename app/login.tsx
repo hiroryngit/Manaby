@@ -113,10 +113,10 @@ const s = StyleSheet.create({
   wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
   hero: { alignItems: 'center', paddingVertical: space.xl, gap: space.xs },
   logo: { width: 72, height: 72, borderRadius: 18 },
-  title: { ...font.h1, color: colors.text, marginTop: space.sm },
+  title: { ...font.h1, color: colors.ink, marginTop: space.sm },
   lead: { ...font.small, color: colors.muted, textAlign: 'center' },
   notice: { backgroundColor: colors.brandSoft, borderColor: colors.brandSoft },
   noticeText: { ...font.small, color: colors.brandInk, lineHeight: 20 },
-  name: { ...font.h3, color: colors.text },
+  name: { ...font.h3, color: colors.ink },
   error: { ...font.small, color: colors.danger },
 });

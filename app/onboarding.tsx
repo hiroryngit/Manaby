@@ -14,24 +14,21 @@ import { colors, font, radius, space } from '../src/theme';
 
 type SelectableRole = Exclude<Role, 'admin'>;
 
-const ROLES: { value: SelectableRole; label: string; description: string; glyph: string }[] = [
+const ROLES: { value: SelectableRole; label: string; description: string }[] = [
   {
     value: 'parent',
     label: '保護者',
     description: 'お子さまの学習状況・レポート・宿題の進捗を確認します',
-    glyph: '👨‍👩‍👧',
   },
   {
     value: 'student',
     label: '生徒',
     description: '宿題の確認・提出と、先生からのコメントを見ます',
-    glyph: '🎒',
   },
   {
     value: 'tutor',
     label: '講師',
     description: '授業記録の入力と、宿題の設定を行います',
-    glyph: '👨‍🏫',
   },
 ];
 
@@ -87,7 +84,6 @@ export default function Onboarding() {
               }}
             >
               <Row style={{ gap: space.md }}>
-                <Text style={s.glyph}>{r.glyph}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.optionLabel, active && { color: colors.brandInk }]}>{r.label}</Text>
                   <Text style={s.optionDesc}>{r.description}</Text>
@@ -124,12 +120,11 @@ export default function Onboarding() {
 
 const s = StyleSheet.create({
   wrap: { padding: space.lg, gap: space.md, paddingBottom: space.xxl },
-  title: { ...font.h1, color: colors.text, marginTop: space.lg },
+  title: { ...font.h1, color: colors.ink, marginTop: space.lg },
   lead: { ...font.small, color: colors.muted, lineHeight: 20, marginBottom: space.md },
   option: {},
   optionActive: { borderColor: colors.brand, backgroundColor: colors.brandSoft },
-  glyph: { fontSize: 28 },
-  optionLabel: { ...font.h3, color: colors.text },
+  optionLabel: { ...font.h3, color: colors.ink },
   optionDesc: { ...font.small, color: colors.muted, marginTop: 2, lineHeight: 18 },
   radio: {
     width: 22,
@@ -139,8 +134,8 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   radioActive: { borderColor: colors.brand, backgroundColor: colors.brand, borderWidth: 7 },
-  confirm: { backgroundColor: '#FFF7ED', borderColor: '#FED7AA', marginTop: space.lg },
-  confirmTitle: { ...font.h3, color: '#9A3412' },
-  confirmBody: { ...font.small, color: '#9A3412', marginTop: space.xs, lineHeight: 19 },
+  confirm: { backgroundColor: colors.accentSoft, marginTop: space.lg },
+  confirmTitle: { ...font.h3, color: colors.warn },
+  confirmBody: { ...font.small, color: colors.warn, marginTop: space.xs },
   error: { ...font.small, color: colors.danger },
 });

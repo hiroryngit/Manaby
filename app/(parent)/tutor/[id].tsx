@@ -132,8 +132,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { ...font.h1, color: colors.brandInk },
-  name: { ...font.h2, color: colors.text },
+  name: { ...font.h2, color: colors.ink },
   muted: { ...font.small, color: colors.muted },
-  body: { ...font.body, color: colors.text, lineHeight: 22, marginTop: space.md },
-  slot: { ...font.h3, color: colors.text },
+  body: { ...font.body, color: colors.ink, lineHeight: 22, marginTop: space.md },
+  slot: { ...font.h3, color: colors.ink },
 });

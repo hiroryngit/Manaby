@@ -149,11 +149,11 @@ const s = StyleSheet.create({
     borderRadius: radius.md,
     padding: space.md,
     ...font.body,
-    color: colors.text,
+    color: colors.ink,
     textAlignVertical: 'top',
     lineHeight: 22,
   },
   tall: { minHeight: 200 },
   mid: { minHeight: 96 },
-  model: { ...font.tiny, color: colors.faint, textAlign: 'center', marginTop: space.md },
+  model: { ...font.caption, color: colors.faint, textAlign: 'center', marginTop: space.md },
 });

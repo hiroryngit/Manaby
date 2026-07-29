@@ -101,6 +101,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { ...font.h2, color: colors.tutor },
-  name: { ...font.h3, color: colors.text },
+  name: { ...font.h3, color: colors.ink },
   meta: { ...font.small, color: colors.muted, marginTop: 2 },
 });

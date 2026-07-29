@@ -103,7 +103,7 @@ const s = StyleSheet.create({
   wrap: { padding: space.lg, gap: space.sm, paddingBottom: space.xxl },
   unitRow: { paddingVertical: space.md, gap: space.sm },
   divider: { borderTopWidth: 1, borderTopColor: colors.border },
-  unitName: { ...font.body, color: colors.text },
+  unitName: { ...font.body, color: colors.ink },
   barTrack: {
     flex: 1,
     height: 8,
@@ -113,7 +113,7 @@ const s = StyleSheet.create({
   },
   barFill: { height: '100%', borderRadius: radius.pill },
   level: { ...font.h3, minWidth: 18, textAlign: 'right' },
-  lessonTitle: { ...font.h3, color: colors.text },
+  lessonTitle: { ...font.h3, color: colors.ink },
   lessonDate: { ...font.small, color: colors.muted, marginTop: 2 },
   chevron: { ...font.h2, color: colors.faint },
 });

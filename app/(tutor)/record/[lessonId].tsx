@@ -195,7 +195,7 @@ const s = StyleSheet.create({
     padding: space.md,
     minHeight: 48,
     ...font.body,
-    color: colors.text,
+    color: colors.ink,
   },
   multiline: { minHeight: 88, textAlignVertical: 'top' },
   chip: {
@@ -206,7 +206,7 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     ...font.small,
   },
-  levelText: { ...font.h2, color: colors.text },
+  levelText: { ...font.h2, color: colors.ink },
   error: { ...font.small, color: colors.danger, marginTop: space.md },
-  hint: { ...font.tiny, color: colors.muted, marginTop: space.sm, lineHeight: 16, textAlign: 'center' },
+  hint: { ...font.caption, color: colors.muted, marginTop: space.sm, lineHeight: 16, textAlign: 'center' },
 });

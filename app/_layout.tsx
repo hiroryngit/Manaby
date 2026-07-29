@@ -31,7 +31,7 @@ function Guard() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
+        headerTintColor: colors.ink,
         headerTitleStyle: { fontWeight: '700' },
         contentStyle: { backgroundColor: colors.bg },
       }}
